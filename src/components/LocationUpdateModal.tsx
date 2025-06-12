@@ -134,8 +134,8 @@ const LocationUpdateModal: React.FC<LocationUpdateModalProps> = ({ property, onC
   const detectInputType = (input: string) => {
     const trimmed = input.trim();
     
-    // Check for Plus Code (format: 8 characters + optional 2-4 more)
-    const plusCodeRegex = /^[23456789CFGHJMPQRVWX]{8}(\+[23456789CFGHJMPQRVWX]{2,4})?$/i;
+    // Check for Plus Code (format: 8 characters + optional 2-4 more, or short codes with +)
+    const plusCodeRegex = /^([23456789CFGHJMPQRVWX]{4,8}\+[23456789CFGHJMPQRVWX]{2,4}|[23456789CFGHJMPQRVWX]{10})$/i;
     if (plusCodeRegex.test(trimmed.replace(/\s/g, ''))) {
       return 'pluscode';
     }
@@ -155,17 +155,167 @@ const LocationUpdateModal: React.FC<LocationUpdateModalProps> = ({ property, onC
     return 'search';
   };
 
-  // Handle Plus Code conversion
-  const handlePlusCode = async (plusCode: string) => {
+  // Google Maps Geocoding API for Plus Code conversion
+  const handlePlusCodeWithGoogleMaps = async (plusCode: string) => {
     try {
-      // For now, we'll use a simple approach - in a real app you'd use the Google Maps API
-      // This is a placeholder that shows how you'd handle it
-      console.log('Plus Code detected:', plusCode);
-      alert('Plus Code support coming soon! Please use coordinates or search for now.');
-      return false;
+      // Clean the plus code
+      const cleanPlusCode = plusCode.trim().toUpperCase().replace(/\s/g, '');
+      
+      // Basic Plus Code validation
+      const plusCodeRegex = /^([23456789CFGHJMPQRVWX]{4,8}\+[23456789CFGHJMPQRVWX]{2,4}|[23456789CFGHJMPQRVWX]{10})$/i;
+      if (!plusCodeRegex.test(cleanPlusCode)) {
+        throw new Error('Invalid Plus Code format');
+      }
+      
+      console.log('Converting Plus Code with Google Maps API:', cleanPlusCode);
+      
+      // Use Google Maps Geocoding API
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(cleanPlusCode)}&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY || 'YOUR_API_KEY_HERE'}`
+      );
+      
+      if (!response.ok) {
+        throw new Error('Google Maps API request failed');
+      }
+      
+      const data = await response.json();
+      console.log('Google Maps API response:', data);
+      
+      if (data.status === 'OK' && data.results && data.results.length > 0) {
+        const result = data.results[0];
+        const { lat, lng } = result.geometry.location;
+        
+        console.log('Plus Code converted to coordinates:', { lat, lng });
+        
+        setLocation({ latitude: lat, longitude: lng });
+        setMapViewport({
+          latitude: lat,
+          longitude: lng,
+          zoom: 16
+        });
+        setShowSuggestions(false);
+        return true;
+      } else {
+        console.warn('Google Maps API returned no results:', data);
+        // Fallback to local implementation
+        return await handlePlusCodeFallback(cleanPlusCode);
+      }
     } catch (error) {
-      console.error('Plus Code conversion error:', error);
+      console.error('Google Maps Plus Code conversion error:', error);
+      // Fallback to local implementation
+      return await handlePlusCodeFallback(plusCode);
+    }
+  };
+
+  // Fallback Plus Code conversion implementation
+  const handlePlusCodeFallback = async (plusCode: string) => {
+    try {
+      // Clean the plus code
+      const cleanPlusCode = plusCode.trim().toUpperCase().replace(/\s/g, '');
+      
+      console.log('Using fallback Plus Code conversion for:', cleanPlusCode);
+      
+      // Try to decode using Open Location Code algorithm
+      const decoded = decodePlusCode(cleanPlusCode);
+      
+      if (decoded) {
+        setLocation({ latitude: decoded.lat, longitude: decoded.lng });
+        setMapViewport({
+          latitude: decoded.lat,
+          longitude: decoded.lng,
+          zoom: 16
+        });
+        setShowSuggestions(false);
+        return true;
+      } else {
+        throw new Error('Unable to decode Plus Code');
+      }
+    } catch (error) {
+      console.error('Fallback Plus Code conversion error:', error);
+      alert(`Unable to convert Plus Code "${plusCode}". Please check the format and try again.`);
       return false;
+    }
+  };
+
+  // Main Plus Code handler that tries Google Maps first, then fallback
+  const handlePlusCode = async (plusCode: string) => {
+    // Check if Google Maps API key is available
+    const hasGoogleMapsKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY && 
+                             import.meta.env.VITE_GOOGLE_MAPS_API_KEY !== 'YOUR_API_KEY_HERE';
+    
+    if (hasGoogleMapsKey) {
+      console.log('Using Google Maps API for Plus Code conversion');
+      return await handlePlusCodeWithGoogleMaps(plusCode);
+    } else {
+      console.log('Google Maps API key not available, using fallback conversion');
+      return await handlePlusCodeFallback(plusCode);
+    }
+  };
+
+  // Simple Plus Code decoder implementation (fallback)
+  const decodePlusCode = (plusCode: string) => {
+    try {
+      // This is a simplified implementation of Open Location Code decoding
+      // For production use, consider using the official openlocationcode library
+      
+      const CODE_ALPHABET = '23456789CFGHJMPQRVWX';
+      const SEPARATOR = '+';
+      const SEPARATOR_POSITION = 8;
+      const PADDING_CHARACTER = '0';
+      
+      // Remove separator and padding
+      let code = plusCode.replace(SEPARATOR, '');
+      
+      // Check if we have at least 8 characters
+      if (code.length < 8) {
+        return null;
+      }
+      
+      // Decode the grid coordinates
+      let latLo = -90.0;
+      let lngLo = -180.0;
+      let latHi = 90.0;
+      let lngHi = 180.0;
+      
+      // Process pairs of characters
+      for (let i = 0; i < Math.min(code.length, 10); i += 2) {
+        if (i >= code.length - 1) break;
+        
+        const latChar = code[i];
+        const lngChar = code[i + 1];
+        
+        const latIndex = CODE_ALPHABET.indexOf(latChar);
+        const lngIndex = CODE_ALPHABET.indexOf(lngChar);
+        
+        if (latIndex === -1 || lngIndex === -1) {
+          return null;
+        }
+        
+        const latRange = latHi - latLo;
+        const lngRange = lngHi - lngLo;
+        
+        const latStep = latRange / 20;
+        const lngStep = lngRange / 20;
+        
+        latLo = latLo + latIndex * latStep;
+        latHi = latLo + latStep;
+        lngLo = lngLo + lngIndex * lngStep;
+        lngHi = lngLo + lngStep;
+      }
+      
+      // Return the center of the final grid cell
+      const lat = (latLo + latHi) / 2;
+      const lng = (lngLo + lngHi) / 2;
+      
+      // Validate the result
+      if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        return { lat, lng };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Plus Code decoding error:', error);
+      return null;
     }
   };
 
@@ -509,7 +659,7 @@ const LocationUpdateModal: React.FC<LocationUpdateModalProps> = ({ property, onC
     const inputType = detectInputType(searchQuery);
     switch (inputType) {
       case 'pluscode':
-        return "Plus Code detected";
+        return "Plus Code detected - will convert to coordinates";
       case 'coordinates':
         return "Coordinates detected";
       default:
@@ -575,7 +725,7 @@ const LocationUpdateModal: React.FC<LocationUpdateModalProps> = ({ property, onC
                       <span className="text-green-600">✓ Coordinates format detected</span>
                     )}
                     {detectInputType(searchQuery) === 'pluscode' && (
-                      <span className="text-blue-600">✓ Plus Code format detected</span>
+                      <span className="text-blue-600">✓ Plus Code format detected - will convert using Google Maps API</span>
                     )}
                     {detectInputType(searchQuery) === 'search' && searchQuery.includes(',') && (
                       <span className="text-gray-500">Search query (use lat,lng for coordinates)</span>
@@ -753,7 +903,19 @@ const LocationUpdateModal: React.FC<LocationUpdateModalProps> = ({ property, onC
                 <div className="text-xs text-blue-700 space-y-1">
                   <div>• <strong>Search:</strong> "Modal Town, Panipat" or "Sector 7"</div>
                   <div>• <strong>Coordinates:</strong> "29.3865, 76.9957" or "29.3865 76.9957"</div>
-                  <div>• <strong>Plus Code:</strong> "7JVW9XPW+XX" (coming soon)</div>
+                  <div>• <strong>Plus Code:</strong> "7JVW9XPW+XX" or "92M2+R8" (Google Maps API powered!)</div>
+                </div>
+              </div>
+
+              {/* API Status Indicator */}
+              <div className="bg-green-50 p-3 rounded-lg">
+                <div className="text-sm text-green-800 font-medium mb-1">Plus Code Conversion:</div>
+                <div className="text-xs text-green-700">
+                  {import.meta.env.VITE_GOOGLE_MAPS_API_KEY && import.meta.env.VITE_GOOGLE_MAPS_API_KEY !== 'YOUR_API_KEY_HERE' ? (
+                    <span>✅ Google Maps API enabled for accurate Plus Code conversion</span>
+                  ) : (
+                    <span>⚠️ Using fallback conversion (add VITE_GOOGLE_MAPS_API_KEY for better accuracy)</span>
+                  )}
                 </div>
               </div>
             </div>

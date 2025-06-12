@@ -37,34 +37,34 @@ const Sidebar: React.FC = () => {
     let count = 0;
     
     // Search query
-    if (filters.searchQuery.trim()) count++;
+    if (filters.searchQuery && filters.searchQuery.trim()) count++;
     
-    // Price range (if not default)
-    if (filters.priceRange[0] > 0 || filters.priceRange[1] < 10000000000) count++;
+    // Price ranges (if any selected)
+    if (filters.priceRanges && filters.priceRanges.length > 0) count++;
     
-    // Size range (if not default)
-    if (filters.sizeRange[0] > 0 || filters.sizeRange[1] < 10000) count++;
+    // Size ranges (if any selected)
+    if (filters.sizeRanges && filters.sizeRanges.length > 0) count++;
     
     // Property types
-    if (filters.propertyTypes.length > 0) count++;
+    if (filters.propertyTypes && filters.propertyTypes.length > 0) count++;
     
     // Rating
     if (filters.rating !== undefined) count++;
     
     // Include tags
-    if (filters.tags.length > 0) count++;
+    if (filters.tags && filters.tags.length > 0) count++;
     
     // Exclude tags
-    if (filters.excludedTags.length > 0) count++;
+    if (filters.excludedTags && filters.excludedTags.length > 0) count++;
     
     // Sort by (if not default)
-    if (filters.sortBy !== 'newest') count++;
+    if (filters.sortBy && filters.sortBy !== 'newest') count++;
     
     // Location status
     if (filters.hasLocation !== null) count++;
     
-    // Radius range (if not default)
-    if (filters.radiusRange[0] > 0 || filters.radiusRange[1] < 50000) count++;
+    // Radius ranges (if any selected)
+    if (filters.radiusRanges && filters.radiusRanges.length > 0) count++;
     
     return count;
   };
@@ -74,10 +74,10 @@ const Sidebar: React.FC = () => {
     let count = 0;
     
     // Search query
-    if (personFilters.searchQuery.trim()) count++;
+    if (personFilters.searchQuery && personFilters.searchQuery.trim()) count++;
     
     // Roles
-    if (personFilters.roles.length > 0) count++;
+    if (personFilters.roles && personFilters.roles.length > 0) count++;
     
     // Has properties
     if (personFilters.hasProperties !== null) count++;
@@ -109,7 +109,7 @@ const Sidebar: React.FC = () => {
                 type="text"
                 placeholder="Search properties, persons, connections..."
                 className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={filters.searchQuery}
+                value={filters.searchQuery || ''}
                 onChange={(e) => updateFilters({ searchQuery: e.target.value })}
               />
               <Search size={18} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
@@ -141,7 +141,7 @@ const Sidebar: React.FC = () => {
                 type="text"
                 placeholder="Search persons, properties, connections..."
                 className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={personFilters.searchQuery}
+                value={personFilters.searchQuery || ''}
                 onChange={(e) => updatePersonFilters({ searchQuery: e.target.value })}
               />
               <Search size={18} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
