@@ -16,7 +16,7 @@ interface PropertyFormProps {
 }
 
 const PropertyForm: React.FC<PropertyFormProps> = ({ property, onClose }) => {
-  const { createProperty, updateProperty, loadingStates, properties } = useStore();
+  const { createProperty, updateProperty, loadingStates, properties, isMobileView } = useStore();
 
   // Helper function to ensure valid location
   const ensureValidLocation = (location: any) => {
@@ -285,8 +285,14 @@ const PropertyForm: React.FC<PropertyFormProps> = ({ property, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-[60] flex items-center justify-center">
-      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div className={`fixed bg-black bg-opacity-50 z-[60] flex items-center justify-center ${
+      isMobileView ? 'inset-0' : 'inset-0'
+    }`}>
+      <div className={`bg-white w-full flex flex-col overflow-y-auto ${
+        isMobileView 
+          ? 'h-full max-w-none rounded-none' 
+          : 'rounded-lg max-w-2xl max-h-[90vh]'
+      }`}>
         <div className="p-4 border-b flex items-center justify-between sticky top-0 bg-white z-10">
           <h2 className="text-lg font-semibold">
             {property
@@ -575,7 +581,7 @@ const PropertyForm: React.FC<PropertyFormProps> = ({ property, onClose }) => {
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border rounded-md hover:bg-gray-50"
+              className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
               disabled={isLoading}
             >
               {UI_TEXT.buttons.cancel}

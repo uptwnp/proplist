@@ -71,16 +71,16 @@ export interface MapViewport {
 export type SortOption = 'price_asc' | 'price_desc' | 'size_asc' | 'size_desc' | 'rating_desc' | 'newest' | 'oldest';
 
 export interface FilterState {
-  priceRange: [number, number];
-  sizeRange: [number, number];
+  priceRanges: [number, number][]; // Support multiple price ranges
+  sizeRanges: [number, number][]; // Support multiple size ranges
   propertyTypes: PropertyType[];
   searchQuery: string;
   tags: string[];
   excludedTags: string[];
   rating?: number;
   sortBy: SortOption;
-  hasLocation: boolean | null; // New filter: true = has location, false = no location, null = all
-  radiusRange: [number, number]; // New filter: radius range in meters
+  hasLocation: boolean | null; // Filter: true = has location, false = no location, null = all
+  radiusRange: [number, number]; // Filter: radius range in meters
 }
 
 export interface PersonFilterState {

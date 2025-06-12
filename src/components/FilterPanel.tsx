@@ -48,6 +48,38 @@ const FilterPanel: React.FC = () => {
     updateFilters({ propertyTypes: currentTypes });
   };
 
+  // Handle multiple price range selection
+  const handlePriceRangeToggle = (range: [number, number]) => {
+    const currentRanges = [...filters.priceRanges];
+    const existingIndex = currentRanges.findIndex(
+      ([min, max]) => min === range[0] && max === range[1]
+    );
+
+    if (existingIndex === -1) {
+      currentRanges.push(range);
+    } else {
+      currentRanges.splice(existingIndex, 1);
+    }
+
+    updateFilters({ priceRanges: currentRanges });
+  };
+
+  // Handle multiple size range selection
+  const handleSizeRangeToggle = (range: [number, number]) => {
+    const currentRanges = [...filters.sizeRanges];
+    const existingIndex = currentRanges.findIndex(
+      ([min, max]) => min === range[0] && max === range[1]
+    );
+
+    if (existingIndex === -1) {
+      currentRanges.push(range);
+    } else {
+      currentRanges.splice(existingIndex, 1);
+    }
+
+    updateFilters({ sizeRanges: currentRanges });
+  };
+
   const handleTagToggle = (tag: string) => {
     const currentTags = [...filters.tags];
     const index = currentTags.indexOf(tag);
@@ -119,6 +151,16 @@ const FilterPanel: React.FC = () => {
     );
   };
 
+  // Check if a price range is selected
+  const isPriceRangeSelected = (range: [number, number]) => {
+    return filters.priceRanges.some(([min, max]) => min === range[0] && max === range[1]);
+  };
+
+  // Check if a size range is selected
+  const isSizeRangeSelected = (range: [number, number]) => {
+    return filters.sizeRanges.some(([min, max]) => min === range[0] && max === range[1]);
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -170,24 +212,26 @@ const FilterPanel: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. Price Range */}
+      {/* 3. Price Range - Multiple Selection */}
       <div>
         <h4 className="text-sm font-medium mb-2">
           {UI_TEXT.labels.priceRange}
+          {filters.priceRanges.length > 0 && (
+            <span className="ml-2 bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full">
+              {filters.priceRanges.length}
+            </span>
+          )}
         </h4>
         <div className="grid grid-cols-2 gap-2">
           {PRICE_RANGES.map((range, index) => (
             <button
               key={index}
               className={`px-3 py-1.5 text-sm rounded-md border ${
-                filters.priceRange[0] === range[0] &&
-                filters.priceRange[1] === range[1]
+                isPriceRangeSelected(range)
                   ? 'bg-blue-50 border-blue-300 text-blue-700'
                   : 'border-gray-300 hover:bg-gray-50'
               }`}
-              onClick={() =>
-                updateFilters({ priceRange: [range[0], range[1]] })
-              }
+              onClick={() => handlePriceRangeToggle(range)}
             >
               {formatCurrency(range[0])} -{' '}
               {range[1] === 100000000 ? '5+ Cr' : formatCurrency(range[1])}
@@ -196,10 +240,17 @@ const FilterPanel: React.FC = () => {
         </div>
       </div>
 
-      {/* 4. Size Range (Collapsed) */}
+      {/* 4. Size Range - Multiple Selection (Collapsed) */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <h4 className="text-sm font-medium">{UI_TEXT.labels.sizeRange}</h4>
+          <h4 className="text-sm font-medium">
+            {UI_TEXT.labels.sizeRange}
+            {filters.sizeRanges.length > 0 && (
+              <span className="ml-2 bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full">
+                {filters.sizeRanges.length}
+              </span>
+            )}
+          </h4>
           <button
             onClick={() => setShowSizeRange(!showSizeRange)}
             className="text-blue-600 text-sm flex items-center"
@@ -218,12 +269,11 @@ const FilterPanel: React.FC = () => {
               <button
                 key={index}
                 className={`px-3 py-1.5 text-sm rounded-md border ${
-                  filters.sizeRange[0] === range[0] &&
-                  filters.sizeRange[1] === range[1]
-                    ? 'bg-blue-50 border-blue-300 text-blue-700'
+                  isSizeRangeSelected(range)
+                    ? 'bg-green-50 border-green-300 text-green-700'
                     : 'border-gray-300 hover:bg-gray-50'
                 }`}
-                onClick={() => updateFilters({ sizeRange: [range[0], range[1]] })}
+                onClick={() => handleSizeRangeToggle(range)}
               >
                 {Math.round(range[0] / 9)} -{' '}
                 {range[1] === 10000 ? '1000+' : Math.round(range[1] / 9)} yd

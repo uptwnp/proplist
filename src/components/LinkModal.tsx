@@ -11,7 +11,7 @@ interface LinkModalProps {
 }
 
 const LinkModal: React.FC<LinkModalProps> = ({ propertyId, link, onClose }) => {
-  const { createLink, updateLink, loadingStates } = useStore();
+  const { createLink, updateLink, loadingStates, isMobileView } = useStore();
   
   const [formData, setFormData] = useState<Partial<Link>>({
     property_id: propertyId,
@@ -96,8 +96,14 @@ const LinkModal: React.FC<LinkModalProps> = ({ propertyId, link, onClose }) => {
   const previewUrl = formData.link ? formatUrl(formData.link) : '';
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-[60] flex items-center justify-center">
-      <div className="bg-white rounded-lg w-full max-w-md">
+    <div className={`fixed bg-black bg-opacity-50 z-[60] flex items-center justify-center ${
+      isMobileView ? 'inset-0' : 'inset-0'
+    }`}>
+      <div className={`bg-white w-full ${
+        isMobileView 
+          ? 'h-full max-w-none rounded-none flex flex-col' 
+          : 'rounded-lg max-w-md'
+      }`}>
         <div className="p-4 border-b flex items-center justify-between">
           <h2 className="text-lg font-semibold flex items-center">
             <LinkIcon size={20} className="mr-2" />
@@ -112,7 +118,9 @@ const LinkModal: React.FC<LinkModalProps> = ({ propertyId, link, onClose }) => {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+        <form onSubmit={handleSubmit} className={`p-4 space-y-4 ${
+          isMobileView ? 'flex-1 overflow-y-auto' : ''
+        }`}>
           <div>
             <label className="block text-sm font-medium mb-1">{UI_TEXT.labels.url} *</label>
             <input
@@ -169,7 +177,9 @@ const LinkModal: React.FC<LinkModalProps> = ({ propertyId, link, onClose }) => {
             </p>
           </div>
 
-          <div className="flex justify-end space-x-3 pt-4">
+          <div className={`flex justify-end space-x-3 pt-4 ${
+            isMobileView ? 'sticky bottom-0 bg-white border-t -mx-4 px-4 py-4' : ''
+          }`}>
             <button
               type="button"
               onClick={onClose}

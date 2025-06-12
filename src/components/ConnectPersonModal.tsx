@@ -11,7 +11,7 @@ interface ConnectPersonModalProps {
 }
 
 const ConnectPersonModal: React.FC<ConnectPersonModalProps> = ({ propertyId, person, onClose }) => {
-  const { createConnection, loadingStates } = useStore();
+  const { createConnection, loadingStates, isMobileView } = useStore();
   const [role, setRole] = useState<typeof CONNECTION_ROLES[number]>('Contact Person');
   const [remark, setRemark] = useState('');
 
@@ -38,8 +38,14 @@ const ConnectPersonModal: React.FC<ConnectPersonModalProps> = ({ propertyId, per
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-[60] flex items-center justify-center">
-      <div className="bg-white rounded-lg w-full max-w-md">
+    <div className={`fixed bg-black bg-opacity-50 z-[60] flex items-center justify-center ${
+      isMobileView ? 'inset-0' : 'inset-0'
+    }`}>
+      <div className={`bg-white w-full ${
+        isMobileView 
+          ? 'h-full max-w-none rounded-none flex flex-col' 
+          : 'rounded-lg max-w-md'
+      }`}>
         <div className="p-4 border-b flex items-center justify-between">
           <h2 className="text-lg font-semibold">{UI_TEXT.buttons.connectPerson}</h2>
           <button 
@@ -51,7 +57,9 @@ const ConnectPersonModal: React.FC<ConnectPersonModalProps> = ({ propertyId, per
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+        <form onSubmit={handleSubmit} className={`p-4 space-y-4 ${
+          isMobileView ? 'flex-1 overflow-y-auto' : ''
+        }`}>
           <div>
             <label className="block text-sm font-medium mb-1">Person Details</label>
             <div className="bg-gray-50 p-3 rounded-lg">
@@ -90,7 +98,9 @@ const ConnectPersonModal: React.FC<ConnectPersonModalProps> = ({ propertyId, per
             />
           </div>
 
-          <div className="flex justify-end space-x-3 pt-4">
+          <div className={`flex justify-end space-x-3 pt-4 ${
+            isMobileView ? 'sticky bottom-0 bg-white border-t -mx-4 px-4 py-4' : ''
+          }`}>
             <button
               type="button"
               onClick={onClose}

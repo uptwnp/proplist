@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { X, MapPin, Crosshair, Layers, Map as MapIcon, Save, Search, Loader2 } from 'lucide-react';
+import { X, MapPin, Crosshair, Layers, Map as MapIcon, Save, Search, Loader2, Navigation } from 'lucide-react';
 import { Property } from '../types';
 import { useStore } from '../store/store';
 import Map, { Marker, NavigationControl, Source, Layer } from 'react-map-gl';
@@ -14,7 +14,7 @@ interface LocationUpdateModalProps {
 }
 
 const LocationUpdateModal: React.FC<LocationUpdateModalProps> = ({ property, onClose }) => {
-  const { updateProperty } = useStore();
+  const { updateProperty, isMobileView } = useStore();
   
   // Backup coordinates for Karnal, Haryana
   const BACKUP_COORDINATES = {
@@ -56,7 +56,7 @@ const LocationUpdateModal: React.FC<LocationUpdateModalProps> = ({ property, onC
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   
-  // Search functionality
+  // Enhanced search functionality
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
@@ -128,6 +128,68 @@ const LocationUpdateModal: React.FC<LocationUpdateModalProps> = ({ property, onC
     setTimeout(() => {
       setShowSuggestions(false);
     }, 150);
+  };
+
+  // Detect input type and handle accordingly
+  const detectInputType = (input: string) => {
+    const trimmed = input.trim();
+    
+    // Check for Plus Code (format: 8 characters + optional 2-4 more)
+    const plusCodeRegex = /^[23456789CFGHJMPQRVWX]{8}(\+[23456789CFGHJMPQRVWX]{2,4})?$/i;
+    if (plusCodeRegex.test(trimmed.replace(/\s/g, ''))) {
+      return 'pluscode';
+    }
+    
+    // Check for coordinates (lat,lng or lat lng)
+    const coordRegex = /^(-?\d+\.?\d*)[,\s]+(-?\d+\.?\d*)$/;
+    const coordMatch = trimmed.match(coordRegex);
+    if (coordMatch) {
+      const lat = parseFloat(coordMatch[1]);
+      const lng = parseFloat(coordMatch[2]);
+      if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        return 'coordinates';
+      }
+    }
+    
+    // Default to search query
+    return 'search';
+  };
+
+  // Handle Plus Code conversion
+  const handlePlusCode = async (plusCode: string) => {
+    try {
+      // For now, we'll use a simple approach - in a real app you'd use the Google Maps API
+      // This is a placeholder that shows how you'd handle it
+      console.log('Plus Code detected:', plusCode);
+      alert('Plus Code support coming soon! Please use coordinates or search for now.');
+      return false;
+    } catch (error) {
+      console.error('Plus Code conversion error:', error);
+      return false;
+    }
+  };
+
+  // Handle coordinate input
+  const handleCoordinates = (coordString: string) => {
+    const coordRegex = /^(-?\d+\.?\d*)[,\s]+(-?\d+\.?\d*)$/;
+    const match = coordString.trim().match(coordRegex);
+    
+    if (match) {
+      const lat = parseFloat(match[1]);
+      const lng = parseFloat(match[2]);
+      
+      if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        setLocation({ latitude: lat, longitude: lng });
+        setMapViewport({
+          latitude: lat,
+          longitude: lng,
+          zoom: 16
+        });
+        setShowSuggestions(false);
+        return true;
+      }
+    }
+    return false;
   };
 
   // Geocoding function using Nominatim (OpenStreetMap)
@@ -239,11 +301,26 @@ const LocationUpdateModal: React.FC<LocationUpdateModalProps> = ({ property, onC
     }
   };
 
-  // Handle search submission
+  // Handle search submission with input type detection
   const handleSearchSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchQuery.trim()) {
-      await geocodeLocation(searchQuery.trim());
+    if (!searchQuery.trim()) return;
+
+    const inputType = detectInputType(searchQuery);
+    
+    switch (inputType) {
+      case 'pluscode':
+        await handlePlusCode(searchQuery.trim());
+        break;
+      case 'coordinates':
+        if (!handleCoordinates(searchQuery)) {
+          alert('Invalid coordinates. Please use format: latitude, longitude (e.g., 29.3865, 76.9957)');
+        }
+        break;
+      case 'search':
+      default:
+        await geocodeLocation(searchQuery.trim());
+        break;
     }
   };
 
@@ -423,9 +500,32 @@ const LocationUpdateModal: React.FC<LocationUpdateModalProps> = ({ property, onC
     ]
   };
 
+  // Get input placeholder based on detected type
+  const getInputPlaceholder = () => {
+    if (!searchQuery) {
+      return "Search location, coordinates (lat,lng), or Plus Code...";
+    }
+    
+    const inputType = detectInputType(searchQuery);
+    switch (inputType) {
+      case 'pluscode':
+        return "Plus Code detected";
+      case 'coordinates':
+        return "Coordinates detected";
+      default:
+        return "Search for a location...";
+    }
+  };
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-[200] flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg w-full max-w-4xl h-[90vh] flex flex-col">
+    <div className={`fixed bg-black bg-opacity-50 z-[200] flex items-center justify-center ${
+      isMobileView ? 'inset-0' : 'inset-0 p-4'
+    }`}>
+      <div className={`bg-white rounded-lg w-full flex flex-col ${
+        isMobileView 
+          ? 'h-full max-w-none rounded-none' 
+          : 'max-w-4xl h-[90vh]'
+      }`}>
         <div className="p-4 border-b flex items-center justify-between flex-shrink-0">
           <div>
             <h2 className="text-lg font-semibold">Update Location</h2>
@@ -442,7 +542,7 @@ const LocationUpdateModal: React.FC<LocationUpdateModalProps> = ({ property, onC
         <div className="flex-1 overflow-y-auto">
           <div className="p-4">
             <div className="space-y-4">
-              {/* Search Bar */}
+              {/* Enhanced Search Bar */}
               <div className="relative">
                 <form onSubmit={handleSearchSubmit} className="relative">
                   <input
@@ -452,7 +552,7 @@ const LocationUpdateModal: React.FC<LocationUpdateModalProps> = ({ property, onC
                     onFocus={handleSearchFocus}
                     onBlur={handleSearchBlur}
                     className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Search for a location..."
+                    placeholder={getInputPlaceholder()}
                     disabled={isSearching}
                   />
                   <button
@@ -467,6 +567,21 @@ const LocationUpdateModal: React.FC<LocationUpdateModalProps> = ({ property, onC
                     )}
                   </button>
                 </form>
+
+                {/* Input Type Indicator */}
+                {searchQuery && (
+                  <div className="mt-1 text-xs text-gray-500">
+                    {detectInputType(searchQuery) === 'coordinates' && (
+                      <span className="text-green-600">✓ Coordinates format detected</span>
+                    )}
+                    {detectInputType(searchQuery) === 'pluscode' && (
+                      <span className="text-blue-600">✓ Plus Code format detected</span>
+                    )}
+                    {detectInputType(searchQuery) === 'search' && searchQuery.includes(',') && (
+                      <span className="text-gray-500">Search query (use lat,lng for coordinates)</span>
+                    )}
+                  </div>
+                )}
 
                 {/* Search Suggestions */}
                 {showSuggestions && searchSuggestions.length > 0 && (
@@ -489,7 +604,9 @@ const LocationUpdateModal: React.FC<LocationUpdateModalProps> = ({ property, onC
               </div>
 
               {/* Map Container */}
-              <div className="h-60 md:h-[22.5rem] rounded-lg overflow-hidden border relative">
+              <div className={`rounded-lg overflow-hidden border relative ${
+                isMobileView ? 'h-64' : 'h-[22.5rem]'
+              }`}>
                 <Map
                   {...mapViewport}
                   style={{ width: '100%', height: '100%' }}
@@ -627,6 +744,16 @@ const LocationUpdateModal: React.FC<LocationUpdateModalProps> = ({ property, onC
                 <div className="text-sm text-gray-600 mb-2">Current Coordinates:</div>
                 <div className="font-mono text-sm">
                   {location.latitude.toFixed(6)}°N, {location.longitude.toFixed(6)}°E
+                </div>
+              </div>
+
+              {/* Input Format Help */}
+              <div className="bg-blue-50 p-3 rounded-lg">
+                <div className="text-sm text-blue-800 font-medium mb-1">Supported Input Formats:</div>
+                <div className="text-xs text-blue-700 space-y-1">
+                  <div>• <strong>Search:</strong> "Modal Town, Panipat" or "Sector 7"</div>
+                  <div>• <strong>Coordinates:</strong> "29.3865, 76.9957" or "29.3865 76.9957"</div>
+                  <div>• <strong>Plus Code:</strong> "7JVW9XPW+XX" (coming soon)</div>
                 </div>
               </div>
             </div>

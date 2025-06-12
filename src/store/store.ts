@@ -465,23 +465,23 @@ interface StoreState {
   updatePropertyPersonsCache: () => void;
 }
 
-// Load initial filters from localStorage
+// Load initial filters from localStorage with proper defaults
 const loadFiltersFromStorage = (): FilterState => {
   try {
     const saved = localStorage.getItem('propertyFilters');
     if (saved) {
       const parsed = JSON.parse(saved);
       return {
-        priceRange: parsed.priceRange || [0, 1000000000000],
-        sizeRange: parsed.sizeRange || [0, 10000000],
+        priceRanges: parsed.priceRanges || [], // Changed to support multiple ranges
+        sizeRanges: parsed.sizeRanges || [], // Changed to support multiple ranges
         propertyTypes: parsed.propertyTypes || [],
         searchQuery: parsed.searchQuery || '',
         tags: parsed.tags || [],
         excludedTags: parsed.excludedTags || [],
         rating: parsed.rating,
         sortBy: parsed.sortBy || 'newest',
-        hasLocation: parsed.hasLocation || null,
-        radiusRange: parsed.radiusRange || [0, 50000],
+        hasLocation: parsed.hasLocation !== undefined ? parsed.hasLocation : null, // Fixed: properly save/load null
+        radiusRange: parsed.radiusRange || [0, 50000], // Fixed: properly save/load radius range
       };
     }
   } catch (error) {
@@ -489,8 +489,8 @@ const loadFiltersFromStorage = (): FilterState => {
   }
   
   return {
-    priceRange: [0, 1000000000000],
-    sizeRange: [0, 10000000],
+    priceRanges: [], // Support multiple price ranges
+    sizeRanges: [], // Support multiple size ranges
     propertyTypes: [],
     searchQuery: '',
     tags: [],
@@ -718,7 +718,7 @@ export const useStore = create<StoreState>((set, get) => ({
     const newFilters = { ...get().filters, ...partialFilters };
     set({ filters: newFilters });
     
-    // Save to localStorage
+    // Save to localStorage with proper serialization
     try {
       localStorage.setItem('propertyFilters', JSON.stringify(newFilters));
     } catch (error) {
@@ -745,8 +745,8 @@ export const useStore = create<StoreState>((set, get) => ({
   resetFilters: () => {
     console.log('Resetting filters');
     const defaultFilters = {
-      priceRange: [0, 1000000000000],
-      sizeRange: [0, 10000000],
+      priceRanges: [],
+      sizeRanges: [],
       propertyTypes: [],
       searchQuery: '',
       tags: [],
@@ -1504,22 +1504,22 @@ export const useStore = create<StoreState>((set, get) => ({
         }
       }
 
-      // Filter by price range (only if not default range)
-      if (filters.priceRange[0] > 0 || filters.priceRange[1] < 10000000000) {
-        if (
-          property.price_min > filters.priceRange[1] ||
-          property.price_max < filters.priceRange[0]
-        ) {
+      // Filter by multiple price ranges (if any are selected)
+      if (filters.priceRanges.length > 0) {
+        const matchesAnyPriceRange = filters.priceRanges.some(([min, max]) => {
+          return !(property.price_min > max || property.price_max < min);
+        });
+        if (!matchesAnyPriceRange) {
           return false;
         }
       }
 
-      // Filter by size range (only if not default range)
-      if (filters.sizeRange[0] > 0 || filters.sizeRange[1] < 10000) {
-        if (
-          property.size_min > filters.sizeRange[1] ||
-          property.size_max < filters.sizeRange[0]
-        ) {
+      // Filter by multiple size ranges (if any are selected)
+      if (filters.sizeRanges.length > 0) {
+        const matchesAnySizeRange = filters.sizeRanges.some(([min, max]) => {
+          return !(property.size_min > max || property.size_max < min);
+        });
+        if (!matchesAnySizeRange) {
           return false;
         }
       }
