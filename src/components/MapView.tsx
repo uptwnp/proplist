@@ -1,13 +1,13 @@
-import React, { useEffect, useCallback, useState, useMemo } from 'react';
+import React, { useEffect, useCallback, useState, useMemo } from "react";
 import Map, {
   Marker,
   NavigationControl,
   Popup,
   Source,
   Layer,
-} from 'react-map-gl';
-import maplibreGl from 'maplibre-gl';
-import { useStore } from '../store/store';
+} from "react-map-gl";
+import maplibreGl from "maplibre-gl";
+import { useStore } from "../store/store";
 import {
   Layers,
   Map as MapIcon,
@@ -16,7 +16,6 @@ import {
   MapPin,
   Eye,
   Store,
-  Mouse as House,
   Building2,
   Building,
   Wheat,
@@ -31,24 +30,26 @@ import {
   Truck,
   Wrench,
   Landmark,
-} from 'lucide-react';
-import { Property } from '../types';
+  LandPlot,
+  Grid2x2 as Grid2x2Check,
+} from "lucide-react";
+import { Property } from "../types";
 import {
   DEFAULT_COORDINATES,
   PROPERTY_TYPE_COLORS,
   PROPERTY_TYPE_ICONS,
   MAP_CONFIG,
-} from '../constants';
-import { formatCurrency } from '../utils/formatters';
-import circle from '@turf/circle';
-import { point } from '@turf/helpers';
+} from "../constants";
+import { formatCurrency } from "../utils/formatters";
+import circle from "@turf/circle";
+import { point } from "@turf/helpers";
 
 // Helper function to ensure valid location
 const ensureValidLocation = (location: any) => {
   if (
     !location ||
-    typeof location.latitude !== 'number' ||
-    typeof location.longitude !== 'number' ||
+    typeof location.latitude !== "number" ||
+    typeof location.longitude !== "number" ||
     isNaN(location.latitude) ||
     isNaN(location.longitude)
   ) {
@@ -57,23 +58,19 @@ const ensureValidLocation = (location: any) => {
   return location;
 };
 
-// Enhanced Icon component mapping with more specific icons
+// Icon component mapping using the constants - Updated with available icons
 const IconComponents = {
-  Home,
+  LandPlot,
   Store,
-  House,
+  Home, // Changed from House to Home
   Building2,
   Building,
   Wheat,
-  MapPin,
+  TreePine,
   Warehouse,
   Factory,
-  Zap,
-  ShoppingBag,
-  TreePine,
-  Truck,
-  Wrench,
-  Landmark,
+  Grid2x2Check,
+  MapPin, // Changed from MapPinHouse to MapPin
 };
 
 const MapView: React.FC = () => {
@@ -94,7 +91,7 @@ const MapView: React.FC = () => {
   const [popupInfo, setPopupInfo] = useState<Property | null>(null);
   const [isSatelliteView, setIsSatelliteView] = useState(() => {
     // Remember satellite view preference
-    const saved = localStorage.getItem('mapSatelliteView');
+    const saved = localStorage.getItem("mapSatelliteView");
     return saved ? JSON.parse(saved) : true;
   });
   const [userLocation, setUserLocation] = useState<{
@@ -105,7 +102,7 @@ const MapView: React.FC = () => {
 
   // Save satellite view preference
   useEffect(() => {
-    localStorage.setItem('mapSatelliteView', JSON.stringify(isSatelliteView));
+    localStorage.setItem("mapSatelliteView", JSON.stringify(isSatelliteView));
   }, [isSatelliteView]);
 
   // Filter properties to only include those with valid locations
@@ -117,8 +114,8 @@ const MapView: React.FC = () => {
         location.latitude !== DEFAULT_COORDINATES.latitude ||
         location.longitude !== DEFAULT_COORDINATES.longitude ||
         (property.location &&
-          typeof property.location.latitude === 'number' &&
-          typeof property.location.longitude === 'number' &&
+          typeof property.location.latitude === "number" &&
+          typeof property.location.longitude === "number" &&
           !isNaN(property.location.latitude) &&
           !isNaN(property.location.longitude))
       );
@@ -127,22 +124,22 @@ const MapView: React.FC = () => {
 
   const onMapLoad = useCallback(
     (event: any) => {
-      console.log('Map loaded, setting initial bounds from map.getBounds()');
+      console.log("Map loaded, setting initial bounds from map.getBounds()");
       const map = event.target;
 
       // Ensure map is properly loaded before getting bounds
-      if (map && typeof map.getBounds === 'function') {
+      if (map && typeof map.getBounds === "function") {
         try {
           const bounds = map.getBounds();
 
-          if (bounds && typeof bounds.getNorth === 'function') {
+          if (bounds && typeof bounds.getNorth === "function") {
             // Use the store's bounds converter to ensure proper format
             setMapViewport({
               bounds: bounds, // Let the store handle the conversion
             });
           }
         } catch (error) {
-          console.warn('Error getting map bounds on load:', error);
+          console.warn("Error getting map bounds on load:", error);
         }
       }
     },
@@ -154,23 +151,23 @@ const MapView: React.FC = () => {
       let bounds;
 
       // Get bounds from the map instance with error handling
-      if (target && typeof target.getBounds === 'function') {
+      if (target && typeof target.getBounds === "function") {
         try {
           const mapBounds = target.getBounds();
-          if (mapBounds && typeof mapBounds.getNorth === 'function') {
+          if (mapBounds && typeof mapBounds.getNorth === "function") {
             bounds = mapBounds; // Pass the MapLibre bounds object directly
           }
         } catch (error) {
-          console.warn('Error getting map bounds on move:', error);
+          console.warn("Error getting map bounds on move:", error);
         }
       }
 
       // Validate viewState before setting
       if (
         viewState &&
-        typeof viewState.latitude === 'number' &&
-        typeof viewState.longitude === 'number' &&
-        typeof viewState.zoom === 'number' &&
+        typeof viewState.latitude === "number" &&
+        typeof viewState.longitude === "number" &&
+        typeof viewState.zoom === "number" &&
         !isNaN(viewState.latitude) &&
         !isNaN(viewState.longitude) &&
         !isNaN(viewState.zoom)
@@ -196,8 +193,8 @@ const MapView: React.FC = () => {
       // Only handle direct map clicks, not marker clicks
       if (
         event.originalEvent.target &&
-        (event.originalEvent.target.closest('.maplibregl-marker') ||
-          event.originalEvent.target.closest('button'))
+        (event.originalEvent.target.closest(".maplibregl-marker") ||
+          event.originalEvent.target.closest("button"))
       ) {
         return;
       }
@@ -211,7 +208,7 @@ const MapView: React.FC = () => {
 
   const handleGPSLocation = (event: React.MouseEvent) => {
     event.stopPropagation();
-    if ('geolocation' in navigator) {
+    if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const { latitude, longitude } = position.coords;
@@ -227,9 +224,9 @@ const MapView: React.FC = () => {
           }
         },
         (error) => {
-          console.error('Error getting location:', error);
+          console.error("Error getting location:", error);
           alert(
-            'Unable to get your location. Please check your GPS settings and try again.'
+            "Unable to get your location. Please check your GPS settings and try again."
           );
         },
         {
@@ -249,7 +246,7 @@ const MapView: React.FC = () => {
             }
           },
           (error) => {
-            console.error('Error watching position:', error);
+            console.error("Error watching position:", error);
           },
           {
             enableHighAccuracy: true,
@@ -260,7 +257,7 @@ const MapView: React.FC = () => {
         setWatchId(id);
       }
     } else {
-      alert('GPS is not supported in your browser');
+      alert("GPS is not supported in your browser");
     }
   };
 
@@ -274,27 +271,17 @@ const MapView: React.FC = () => {
   }, [watchId]);
 
   const getMarkerColor = (property: Property): string => {
-    return PROPERTY_TYPE_COLORS[property.type] || '#6B7280';
+    return PROPERTY_TYPE_COLORS[property.type] || "#6B7280";
   };
 
   const getMarkerIcon = (property: Property) => {
-    // Enhanced icon mapping for better visual representation
-    const iconMapping = {
-      'Plot Residential': Home,
-      Shop: Store,
-      House: House,
-      Colony: Building2,
-      Flats: Building,
-      'Agriculture Land': Wheat,
-      'Free Zone Land': TreePine,
-      Godown: Warehouse,
-      Factory: Factory,
-      'Big Commercial': ShoppingBag,
-      'Plot Industrial': Zap,
-      Other: Landmark,
-    };
+    // Use the PROPERTY_TYPE_ICONS constant to get the correct icon name
+    const iconName = PROPERTY_TYPE_ICONS[property.type] || "MapPin";
 
-    const IconComponent = iconMapping[property.type] || MapPin;
+    // Get the corresponding icon component
+    const IconComponent =
+      IconComponents[iconName as keyof typeof IconComponents] || MapPin;
+
     return IconComponent;
   };
 
@@ -312,23 +299,21 @@ const MapView: React.FC = () => {
       version: 8,
       sources: {
         osm: {
-          type: 'raster',
+          type: "raster",
           tiles: [
-            isSatelliteView
-              ? MAP_CONFIG.satelliteUrl
-              : MAP_CONFIG.streetUrl,
+            isSatelliteView ? MAP_CONFIG.satelliteUrl : MAP_CONFIG.streetUrl,
           ],
           tileSize: 256,
           attribution: isSatelliteView
-            ? '© Esri'
-            : '© OpenStreetMap contributors',
+            ? "© Esri"
+            : "© OpenStreetMap contributors",
         },
       },
       layers: [
         {
-          id: 'osm',
-          type: 'raster',
-          source: 'osm',
+          id: "osm",
+          type: "raster",
+          source: "osm",
           minzoom: 0,
           maxzoom: 19,
         },
@@ -342,8 +327,8 @@ const MapView: React.FC = () => {
     const viewport = { ...mapViewport };
 
     if (
-      typeof viewport.latitude !== 'number' ||
-      typeof viewport.longitude !== 'number' ||
+      typeof viewport.latitude !== "number" ||
+      typeof viewport.longitude !== "number" ||
       isNaN(viewport.latitude) ||
       isNaN(viewport.longitude)
     ) {
@@ -351,7 +336,7 @@ const MapView: React.FC = () => {
       viewport.longitude = DEFAULT_COORDINATES.longitude;
     }
 
-    if (typeof viewport.zoom !== 'number' || isNaN(viewport.zoom)) {
+    if (typeof viewport.zoom !== "number" || isNaN(viewport.zoom)) {
       viewport.zoom = 12;
     }
 
@@ -360,7 +345,7 @@ const MapView: React.FC = () => {
     const { bounds, ...viewportWithoutBounds } = viewport;
 
     console.log(
-      'MapView rendering with safeMapViewport:',
+      "MapView rendering with safeMapViewport:",
       viewportWithoutBounds
     );
     return viewportWithoutBounds;
@@ -369,7 +354,7 @@ const MapView: React.FC = () => {
   const openInGoogleMaps = (property: Property) => {
     const { latitude, longitude } = property.location;
     const url = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`;
-    window.open(url, '_blank');
+    window.open(url, "_blank");
   };
 
   const renderRating = (rating?: number) => {
@@ -392,7 +377,7 @@ const MapView: React.FC = () => {
       property.location.longitude,
       property.location.latitude,
     ]);
-    const options = { steps: 64, units: 'meters' as const };
+    const options = { steps: 64, units: "meters" as const };
     const circleGeojson = circle(center, property.radius, options);
 
     return circleGeojson;
@@ -402,7 +387,7 @@ const MapView: React.FC = () => {
     <div className="relative w-full h-full">
       <Map
         {...safeMapViewport}
-        style={{ width: '100%', height: '100%' }}
+        style={{ width: "100%", height: "100%" }}
         mapStyle={mapStyle}
         onLoad={onMapLoad}
         onMove={onMapMove}
@@ -430,18 +415,18 @@ const MapView: React.FC = () => {
                 id={`radius-fill-${property.id}`}
                 type="fill"
                 paint={{
-                  'fill-color': baseColor,
-                  'fill-opacity': isSelected ? 0.25 : 0.15,
+                  "fill-color": baseColor,
+                  "fill-opacity": isSelected ? 0.25 : 0.15,
                 }}
               />
               <Layer
                 id={`radius-border-${property.id}`}
                 type="line"
                 paint={{
-                  'line-color': baseColor,
-                  'line-width': isSelected ? 3 : 2,
-                  'line-opacity': isSelected ? 0.8 : 0.6,
-                  'line-dasharray': isSelected ? [1, 0] : [2, 2],
+                  "line-color": baseColor,
+                  "line-width": isSelected ? 3 : 2,
+                  "line-opacity": isSelected ? 0.8 : 0.6,
+                  "line-dasharray": isSelected ? [1, 0] : [2, 2],
                 }}
               />
             </Source>
@@ -468,22 +453,21 @@ const MapView: React.FC = () => {
               <div
                 className={`flex items-center justify-center rounded-full border-3 transition-all cursor-pointer shadow-lg ${
                   isSelected
-                    ? 'scale-125 border-white shadow-xl animate-pulse ring-4 ring-white ring-opacity-50'
-                    : 'border-white shadow-md hover:scale-110 hover:shadow-xl'
+                    ? "scale-125 border-white shadow-xl animate-pulse ring-4 ring-white ring-opacity-50"
+                    : "border-white shadow-md hover:scale-110 hover:shadow-xl"
                 }`}
                 style={{
                   backgroundColor: getMarkerColor(property),
                   width: markerSize,
                   height: markerSize,
-                  borderWidth: '3px',
+                  borderWidth: "3px",
                 }}
               >
                 <IconComponent
                   size={markerSize * 0.55}
                   color="white"
-                  fill="white"
-                  fillOpacity={1}
-                  strokeWidth={1.5}
+                  strokeWidth={2}
+                  fill="none"
                 />
               </div>
             </Marker>
@@ -521,13 +505,12 @@ const MapView: React.FC = () => {
                 <div className="flex-1">
                   <div className="flex items-center space-x-2 mb-1">
                     <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
-                      {popupInfo.type || 'Property'}
+                      {popupInfo.type || "Property"}
                     </span>
                     {popupInfo.rating > 0 && renderRating(popupInfo.rating)}
-
                   </div>
                   <h3 className="font-semibold text-gray-900 text-sm leading-tight">
-                    {popupInfo.area || 'Property Area'}
+                    {popupInfo.area || "Property Area"}
                   </h3>
                 </div>
               </div>
@@ -605,13 +588,13 @@ const MapView: React.FC = () => {
               setIsLiveView(!isLiveView);
             }}
             className={`flex items-center space-x-2 px-3 py-1.5 rounded-md transition-colors ${
-              isLiveView ? 'bg-blue-50 text-blue-600' : 'hover:bg-gray-100'
+              isLiveView ? "bg-blue-50 text-blue-600" : "hover:bg-gray-100"
             }`}
-            title={isLiveView ? 'Live view enabled' : 'Live view disabled'}
+            title={isLiveView ? "Live view enabled" : "Live view disabled"}
           >
             <Eye
               size={18}
-              className={isLiveView ? 'text-blue-600' : 'text-gray-600'}
+              className={isLiveView ? "text-blue-600" : "text-gray-600"}
             />
             <span className="text-sm">Live View</span>
           </button>
@@ -641,8 +624,8 @@ const MapView: React.FC = () => {
             }}
             title={
               isSatelliteView
-                ? 'Switch to Street View'
-                : 'Switch to Satellite View'
+                ? "Switch to Street View"
+                : "Switch to Satellite View"
             }
           >
             {isSatelliteView ? <MapIcon size={18} /> : <Layers size={18} />}
