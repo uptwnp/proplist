@@ -1,553 +1,149 @@
 import { create } from 'zustand';
-import {
-  Property,
-  Person,
-  Connection,
-  Link,
-  MapViewport,
-  FilterState,
-  PersonFilterState,
-  SortOption,
-} from '../types';
+import { Property, Person, Connection, Link, FilterState, PersonFilterState, MapViewport, SortOption } from '../types';
 import { propertyAPI, personAPI, connectionAPI, linkAPI } from '../utils/api';
-import {
-  DEFAULT_COORDINATES,
-  MAP_CONFIG,
-  ERROR_MESSAGES,
-  PROPERTY_TYPES,
-  PERSON_ROLES,
-} from '../constants';
+import { DEFAULT_COORDINATES, PRICE_RANGES, SIZE_RANGES } from '../constants';
 
 // Helper function to ensure valid location
 const ensureValidLocation = (location: any) => {
-  if (
-    !location ||
-    typeof location.latitude !== 'number' ||
-    typeof location.longitude !== 'number' ||
-    isNaN(location.latitude) ||
-    isNaN(location.longitude)
-  ) {
+  if (!location || 
+      typeof location.latitude !== 'number' || 
+      typeof location.longitude !== 'number' ||
+      isNaN(location.latitude) || 
+      isNaN(location.longitude)) {
     return DEFAULT_COORDINATES;
   }
   return location;
 };
 
-// Helper function to validate bounds object
-const isValidBounds = (bounds: any): boolean => {
-  if (!bounds || typeof bounds !== 'object') {
-    return false;
-  }
+interface LoadingStates {
+  properties: boolean;
+  persons: boolean;
+  connections: boolean;
+  links: boolean;
+  creating: boolean;
+  updating: boolean;
+  deleting: boolean;
+}
 
-  const { north, south, east, west } = bounds;
-
-  return (
-    typeof north === 'number' &&
-    !isNaN(north) &&
-    typeof south === 'number' &&
-    !isNaN(south) &&
-    typeof east === 'number' &&
-    !isNaN(east) &&
-    typeof west === 'number' &&
-    !isNaN(west) &&
-    north > south &&
-    east > west
-  );
-};
-
-// Helper function to convert MapLibre bounds to plain object
-const convertBoundsToPlainObject = (bounds: any) => {
-  if (!bounds) {
-    console.log('No bounds provided');
-    return null;
-  }
-
-  try {
-    // Handle MapLibre LngLatBounds object
-    if (typeof bounds.getNorth === 'function') {
-      const plainBounds = {
-        north: bounds.getNorth(),
-        south: bounds.getSouth(),
-        east: bounds.getEast(),
-        west: bounds.getWest(),
-      };
-      console.log('Converted LngLatBounds to plain object:', plainBounds);
-      return isValidBounds(plainBounds) ? plainBounds : null;
-    }
-
-    // Handle plain object bounds
-    if (isValidBounds(bounds)) {
-      console.log('Using valid plain object bounds:', bounds);
-      return bounds;
-    }
-
-    console.log('Invalid bounds detected, not setting bounds in viewport');
-    return null;
-  } catch (error) {
-    console.error('Error converting bounds:', error);
-    return null;
-  }
-};
-
-// Helper function to ensure valid viewport
-const ensureValidViewport = (viewport: Partial<MapViewport>): MapViewport => {
-  const safeViewport: MapViewport = {
-    latitude: DEFAULT_COORDINATES.latitude,
-    longitude: DEFAULT_COORDINATES.longitude,
-    zoom: MAP_CONFIG.defaultZoom,
-  };
-
-  if (
-    viewport.latitude &&
-    typeof viewport.latitude === 'number' &&
-    !isNaN(viewport.latitude)
-  ) {
-    safeViewport.latitude = viewport.latitude;
-  }
-
-  if (
-    viewport.longitude &&
-    typeof viewport.longitude === 'number' &&
-    !isNaN(viewport.longitude)
-  ) {
-    safeViewport.longitude = viewport.longitude;
-  }
-
-  if (
-    viewport.zoom &&
-    typeof viewport.zoom === 'number' &&
-    !isNaN(viewport.zoom)
-  ) {
-    safeViewport.zoom = viewport.zoom;
-  }
-
-  // Only include bounds if they are valid - use the converter
-  const validBounds = convertBoundsToPlainObject(viewport.bounds);
-  if (validBounds) {
-    safeViewport.bounds = validBounds;
-  }
-
-  return safeViewport;
-};
-
-// Helper function to sort properties
-const sortProperties = (
-  properties: Property[],
-  sortBy: SortOption
-): Property[] => {
-  const sorted = [...properties];
-
-  switch (sortBy) {
-    case 'price_asc':
-      return sorted.sort((a, b) => a.price_min - b.price_min);
-    case 'price_desc':
-      return sorted.sort((a, b) => b.price_min - a.price_min);
-    case 'size_asc':
-      return sorted.sort((a, b) => a.size_min - b.size_min);
-    case 'size_desc':
-      return sorted.sort((a, b) => b.size_min - a.size_min);
-    case 'rating_desc':
-      return sorted.sort((a, b) => (b.rating || 0) - (a.rating || 0));
-    case 'newest':
-      return sorted.sort((a, b) => b.id - a.id); // Assuming higher ID means newer
-    case 'oldest':
-      return sorted.sort((a, b) => a.id - b.id);
-    default:
-      return sorted;
-  }
-};
-
-// Enhanced search function for properties - searches ALL fields comprehensively
-const searchInProperty = (
-  property: Property,
-  searchQuery: string,
-  connections: Connection[],
-  persons: Person[]
-): boolean => {
-  if (!searchQuery || !searchQuery.trim()) return true;
-
-  const searchLower = searchQuery.toLowerCase().trim();
-
-  // Search in ALL property fields including numeric values and formatted values
-  const propertyFields = [
-    // Text fields
-    property.area,
-    property.zone,
-    property.description,
-    property.note,
-    property.type,
-
-    // Numeric fields converted to strings
-    property.price_min?.toString(),
-    property.price_max?.toString(),
-    property.size_min?.toString(),
-    property.size_max?.toString(),
-    property.rating?.toString(),
-    property.radius?.toString(),
-    property.id?.toString(),
-
-    // Formatted values for better search experience
-    Math.round(property.size_min)?.toString(), // Size in sq yards (min)
-    Math.round(property.size_max)?.toString(), // Size in sq yards (max)
-
-    // Price in different formats
-    property.price_min?.toFixed(1), // Price in lakhs
-    property.price_max?.toFixed(1),
-
-    // Location coordinates as searchable text
-    property.location?.latitude?.toString(),
-    property.location?.longitude?.toString(),
-    property.location?.latitude?.toFixed(6),
-    property.location?.longitude?.toFixed(6),
-
-    // Radius in different formats
-    property.radius && property.radius >= 1000
-      ? `${(property.radius / 1000).toFixed(1)}km`
-      : `${property.radius}m`,
-
-    // All tags
-    ...property.tags,
-
-    // Join all tags as a single string for phrase searching
-    property.tags.join(' '),
-
-    // Created/updated dates if available
-    property.created_on,
-    property.updated_on,
-  ].filter(Boolean);
-
-  // Check if any property field matches
-  const propertyMatch = propertyFields.some(
-    (field) => field && field.toString().toLowerCase().includes(searchLower)
-  );
-
-  if (propertyMatch) return true;
-
-  // Search in connected persons and connection details
-  const propertyConnections = connections.filter(
-    (conn) => conn.property_id === property.id
-  );
-
-  for (const connection of propertyConnections) {
-    // Check connection fields
-    const connectionFields = [
-      connection.remark,
-      connection.role,
-      connection.id?.toString(),
-    ].filter(Boolean);
-
-    const connectionMatch = connectionFields.some(
-      (field) => field && field.toString().toLowerCase().includes(searchLower)
-    );
-
-    if (connectionMatch) return true;
-
-    // Find connected person and search in ALL their details
-    const connectedPerson = persons.find(
-      (person) => person.id === connection.person_id
-    );
-    if (connectedPerson) {
-      const personFields = [
-        connectedPerson.name,
-        connectedPerson.phone,
-        connectedPerson.alternative_contact,
-        connectedPerson.about,
-        connectedPerson.role,
-        connectedPerson.id?.toString(),
-      ].filter(Boolean);
-
-      const personMatch = personFields.some(
-        (field) => field && field.toString().toLowerCase().includes(searchLower)
-      );
-
-      if (personMatch) return true;
-    }
-  }
-
-  return false;
-};
-
-// Enhanced search function for persons - searches ALL fields comprehensively
-const searchInPerson = (
-  person: Person,
-  searchQuery: string,
-  connections: Connection[],
-  properties: Property[]
-): boolean => {
-  if (!searchQuery || !searchQuery.trim()) return true;
-
-  const searchLower = searchQuery.toLowerCase().trim();
-
-  // Search in ALL person fields
-  const personFields = [
-    person.name,
-    person.phone,
-    person.alternative_contact,
-    person.about,
-    person.role,
-    person.id?.toString(),
-  ].filter(Boolean);
-
-  // Check if any person field matches
-  const personMatch = personFields.some(
-    (field) => field && field.toString().toLowerCase().includes(searchLower)
-  );
-
-  if (personMatch) return true;
-
-  // Search in connected properties and connection details
-  const personConnections = connections.filter(
-    (conn) => conn.person_id === person.id
-  );
-
-  for (const connection of personConnections) {
-    // Check connection fields
-    const connectionFields = [
-      connection.remark,
-      connection.role,
-      connection.id?.toString(),
-    ].filter(Boolean);
-
-    const connectionMatch = connectionFields.some(
-      (field) => field && field.toString().toLowerCase().includes(searchLower)
-    );
-
-    if (connectionMatch) return true;
-
-    // Find connected property and search in ALL their details
-    const connectedProperty = properties.find(
-      (property) => property.id === connection.property_id
-    );
-    if (connectedProperty) {
-      const propertyFields = [
-        // Text fields
-        connectedProperty.area,
-        connectedProperty.zone,
-        connectedProperty.description,
-        connectedProperty.note,
-        connectedProperty.type,
-
-        // Numeric fields
-        connectedProperty.price_min?.toString(),
-        connectedProperty.price_max?.toString(),
-        connectedProperty.size_min?.toString(),
-        connectedProperty.size_max?.toString(),
-        connectedProperty.rating?.toString(),
-        connectedProperty.radius?.toString(),
-        connectedProperty.id?.toString(),
-
-        // Formatted values
-        Math.round(connectedProperty.size_min)?.toString(),
-        Math.round(connectedProperty.size_max)?.toString(),
-        connectedProperty.price_min?.toFixed(1),
-        connectedProperty.price_max?.toFixed(1),
-
-        // Location
-        connectedProperty.location?.latitude?.toString(),
-        connectedProperty.location?.longitude?.toString(),
-
-        // Tags
-        ...connectedProperty.tags,
-        connectedProperty.tags.join(' '),
-      ].filter(Boolean);
-
-      const propertyMatch = propertyFields.some(
-        (field) => field && field.toString().toLowerCase().includes(searchLower)
-      );
-
-      if (propertyMatch) return true;
-    }
-  }
-
-  return false;
-};
-
-interface StoreState {
+interface Store {
+  // Data
   properties: Property[];
-  filteredProperties: Property[];
   persons: Person[];
-  filteredPersons: Person[];
   connections: Connection[];
   links: Link[];
+  
+  // Filtered data
+  filteredProperties: Property[];
+  filteredPersons: Person[];
+  
+  // UI State
   selectedProperty: Property | null;
-  selectedPerson: Person | null;
-  mapViewport: MapViewport;
-  filters: FilterState;
-  personFilters: PersonFilterState;
-  isSidebarOpen: boolean;
-  isFilterDrawerOpen: boolean;
   isPropertyDetailOpen: boolean;
+  isSidebarOpen: boolean;
   isMobileView: boolean;
+  isFilterDrawerOpen: boolean;
   showPropertyForm: boolean;
   showPersonForm: boolean;
   editingProperty: Property | null;
   editingPerson: Person | null;
   activeTab: 'properties' | 'persons';
   isLiveView: boolean;
+  
+  // Map state
+  mapViewport: MapViewport;
+  
+  // Filters
+  filters: FilterState;
+  personFilters: PersonFilterState;
+  
+  // Loading states
+  loadingStates: LoadingStates;
   isLoading: boolean;
   error: string | null;
   
-  // Property-specific data caches
-  propertyConnections: Record<number, Connection[]>;
-  propertyLinks: Record<number, Link[]>;
-  propertyPersons: Record<number, Person[]>;
-  
-  // Data loading states - track what's been loaded
-  dataLoaded: {
-    properties: boolean;
-    persons: boolean;
-    connections: boolean;
-    links: boolean;
-  };
-  
-  // Granular loading states
-  loadingStates: {
-    properties: boolean;
-    persons: boolean;
-    connections: boolean;
-    links: boolean;
-    creating: boolean;
-    updating: boolean;
-    deleting: boolean;
-    propertyDetails: boolean;
-  };
-
   // Actions
   setProperties: (properties: Property[]) => void;
   setPersons: (persons: Person[]) => void;
   setConnections: (connections: Connection[]) => void;
   setLinks: (links: Link[]) => void;
-  setSelectedProperty: (property: Property | null) => void;
-  setSelectedPerson: (person: Person | null) => void;
-  setMapViewport: (viewport: Partial<MapViewport>) => void;
-  updateFilters: (partialFilters: Partial<FilterState>) => void;
-  updatePersonFilters: (partialFilters: Partial<PersonFilterState>) => void;
-  resetFilters: () => void;
-  resetPersonFilters: () => void;
-  toggleSidebar: () => void;
-  toggleFilterDrawer: () => void;
-  togglePropertyDetail: (force?: boolean) => void;
-  setMobileView: (isMobile: boolean) => void;
-  togglePropertyForm: (property?: Property | null) => void;
-  togglePersonForm: (person?: Person | null) => void;
-  setActiveTab: (tab: 'properties' | 'persons') => void;
   setFilteredProperties: (properties: Property[]) => void;
+  setSelectedProperty: (property: Property | null) => void;
+  setMapViewport: (viewport: Partial<MapViewport>) => void;
+  setMobileView: (isMobile: boolean) => void;
+  setActiveTab: (tab: 'properties' | 'persons') => void;
   setIsLiveView: (isLive: boolean) => void;
-  setLoading: (loading: boolean) => void;
-  setError: (error: string | null) => void;
-  setLoadingState: (key: keyof StoreState['loadingStates'], loading: boolean) => void;
-
-  // Optimized API Actions
+  
+  // UI Actions
+  toggleSidebar: () => void;
+  togglePropertyDetail: (open?: boolean) => void;
+  toggleFilterDrawer: () => void;
+  togglePropertyForm: (property?: Property) => void;
+  togglePersonForm: (person?: Person) => void;
+  
+  // Filter Actions
+  updateFilters: (newFilters: Partial<FilterState>) => void;
+  resetFilters: () => void;
+  updatePersonFilters: (newFilters: Partial<PersonFilterState>) => void;
+  resetPersonFilters: () => void;
+  
+  // Data Actions
   loadProperties: () => Promise<void>;
   loadPersons: () => Promise<void>;
   loadConnections: () => Promise<void>;
   loadLinks: () => Promise<void>;
   loadAllData: () => Promise<void>;
-  loadPropertyDetails: (propertyId: number) => Promise<void>;
+  
   createProperty: (property: Omit<Property, 'id'>) => Promise<void>;
   updateProperty: (property: Property) => Promise<void>;
   deleteProperty: (id: number) => Promise<void>;
+  
   createPerson: (person: Omit<Person, 'id'>) => Promise<void>;
   updatePerson: (person: Person) => Promise<void>;
   deletePerson: (id: number) => Promise<void>;
+  
   createConnection: (connection: Omit<Connection, 'id'>) => Promise<void>;
   deleteConnection: (id: number) => Promise<void>;
+  
   createLink: (link: Omit<Link, 'id'>) => Promise<void>;
   updateLink: (link: Link) => Promise<void>;
   deleteLink: (id: number) => Promise<void>;
-
-  // Derived actions
-  filterProperties: () => void;
-  filterPersons: () => void;
+  
+  // Helper functions
   getPropertyPersons: (propertyId: number) => Person[];
   getPropertyLinks: (propertyId: number) => Link[];
-  focusMapOnProperty: (property: Property) => void;
   getAllTags: () => string[];
-  updatePropertyPersonsCache: () => void;
+  applyFilters: () => void;
+  applyPersonFilters: () => void;
 }
 
-// Load initial filters from localStorage with proper defaults
-const loadFiltersFromStorage = (): FilterState => {
-  try {
-    const saved = localStorage.getItem('propertyFilters');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      return {
-        priceRanges: parsed.priceRanges || [], // Changed to support multiple ranges
-        sizeRanges: parsed.sizeRanges || [], // Changed to support multiple ranges
-        propertyTypes: parsed.propertyTypes || [],
-        searchQuery: parsed.searchQuery || '',
-        tags: parsed.tags || [],
-        excludedTags: parsed.excludedTags || [],
-        rating: parsed.rating,
-        sortBy: parsed.sortBy || 'newest',
-        hasLocation: parsed.hasLocation !== undefined ? parsed.hasLocation : null, // Fixed: properly save/load null
-        radiusRange: parsed.radiusRange || [0, 50000], // Fixed: properly save/load radius range
-      };
-    }
-  } catch (error) {
-    console.error('Error loading filters from storage:', error);
-  }
-  
-  return {
-    priceRanges: [], // Support multiple price ranges
-    sizeRanges: [], // Support multiple size ranges
-    propertyTypes: [],
-    searchQuery: '',
-    tags: [],
-    excludedTags: [],
-    sortBy: 'newest',
-    hasLocation: null,
-    radiusRange: [0, 50000],
-  };
+const initialFilters: FilterState = {
+  priceRanges: [],
+  sizeRanges: [],
+  propertyTypes: [],
+  searchQuery: '',
+  tags: [],
+  excludedTags: [],
+  rating: undefined,
+  sortBy: 'newest',
+  hasLocation: null,
+  radiusRange: [0, 50000],
+  zone: undefined,
+  area: undefined,
 };
 
-// Load initial person filters from localStorage
-const loadPersonFiltersFromStorage = (): PersonFilterState => {
-  try {
-    const saved = localStorage.getItem('personFilters');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      return {
-        searchQuery: parsed.searchQuery || '',
-        roles: parsed.roles || [],
-        hasProperties: parsed.hasProperties,
-      };
-    }
-  } catch (error) {
-    console.error('Error loading person filters from storage:', error);
-  }
-  
-  return {
-    searchQuery: '',
-    roles: [],
-    hasProperties: null,
-  };
+const initialPersonFilters: PersonFilterState = {
+  searchQuery: '',
+  roles: [],
+  hasProperties: null,
 };
 
-// Load initial map viewport from localStorage
-const loadMapViewportFromStorage = (): MapViewport => {
-  try {
-    const saved = localStorage.getItem('mapViewport');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      return ensureValidViewport(parsed);
-    }
-  } catch (error) {
-    console.error('Error loading map viewport from storage:', error);
-  }
-  
-  return ensureValidViewport({
-    latitude: DEFAULT_COORDINATES.latitude,
-    longitude: DEFAULT_COORDINATES.longitude,
-    zoom: MAP_CONFIG.defaultZoom,
-  });
+const initialMapViewport: MapViewport = {
+  latitude: DEFAULT_COORDINATES.latitude,
+  longitude: DEFAULT_COORDINATES.longitude,
+  zoom: 12,
 };
 
-const initialFilters = loadFiltersFromStorage();
-const initialPersonFilters = loadPersonFiltersFromStorage();
-const initialMapViewport = loadMapViewportFromStorage();
-
-const initialLoadingStates = {
+const initialLoadingStates: LoadingStates = {
   properties: false,
   persons: false,
   connections: false,
@@ -555,1145 +151,726 @@ const initialLoadingStates = {
   creating: false,
   updating: false,
   deleting: false,
-  propertyDetails: false,
 };
 
-const initialDataLoaded = {
-  properties: false,
-  persons: false,
-  connections: false,
-  links: false,
-};
-
-export const useStore = create<StoreState>((set, get) => ({
+export const useStore = create<Store>((set, get) => ({
+  // Initial state
   properties: [],
-  filteredProperties: [],
   persons: [],
-  filteredPersons: [],
   connections: [],
   links: [],
+  filteredProperties: [],
+  filteredPersons: [],
   selectedProperty: null,
-  selectedPerson: null,
-  mapViewport: initialMapViewport,
-  filters: initialFilters,
-  personFilters: initialPersonFilters,
-  isSidebarOpen: true,
-  isFilterDrawerOpen: false,
   isPropertyDetailOpen: false,
+  isSidebarOpen: true,
   isMobileView: false,
+  isFilterDrawerOpen: false,
   showPropertyForm: false,
   showPersonForm: false,
   editingProperty: null,
   editingPerson: null,
   activeTab: 'properties',
-  isLiveView: false,
+  isLiveView: true,
+  mapViewport: initialMapViewport,
+  filters: initialFilters,
+  personFilters: initialPersonFilters,
+  loadingStates: initialLoadingStates,
   isLoading: false,
   error: null,
-  dataLoaded: initialDataLoaded,
-  loadingStates: initialLoadingStates,
-  propertyConnections: {},
-  propertyLinks: {},
-  propertyPersons: {},
 
-  // Basic Actions
+  // Setters
   setProperties: (properties) => {
-    console.log('Setting properties:', properties.length);
-
-    // Ensure all properties have valid locations
-    const validProperties = properties.map((property) => ({
-      ...property,
-      location: ensureValidLocation(property.location),
-    }));
-
-    set({ 
-      properties: validProperties,
-      dataLoaded: { ...get().dataLoaded, properties: true }
-    });
-    get().filterProperties();
+    set({ properties });
+    get().applyFilters();
   },
-
+  
   setPersons: (persons) => {
-    console.log('Setting persons:', persons.length);
-    set({ 
-      persons,
-      dataLoaded: { ...get().dataLoaded, persons: true }
-    });
-    get().filterPersons();
+    set({ persons });
+    get().applyPersonFilters();
   },
-
-  setConnections: (connections) => {
-    console.log('Setting connections:', connections.length);
-    set({ 
-      connections,
-      dataLoaded: { ...get().dataLoaded, connections: true }
-    });
-    
-    // Update property-specific caches when connections are loaded
-    const { propertyConnections } = get();
-    const newPropertyConnections = { ...propertyConnections };
-    
-    connections.forEach(connection => {
-      const propertyId = connection.property_id;
-      if (!newPropertyConnections[propertyId]) {
-        newPropertyConnections[propertyId] = [];
-      }
-      // Only add if not already present
-      if (!newPropertyConnections[propertyId].find(c => c.id === connection.id)) {
-        newPropertyConnections[propertyId].push(connection);
-      }
-    });
-    
-    set({ propertyConnections: newPropertyConnections });
-  },
-
-  setLinks: (links) => {
-    console.log('Setting links:', links.length);
-    set({ 
-      links,
-      dataLoaded: { ...get().dataLoaded, links: true }
-    });
-    
-    // Update property-specific caches when links are loaded
-    const { propertyLinks } = get();
-    const newPropertyLinks = { ...propertyLinks };
-    
-    links.forEach(link => {
-      const propertyId = link.property_id;
-      if (!newPropertyLinks[propertyId]) {
-        newPropertyLinks[propertyId] = [];
-      }
-      // Only add if not already present
-      if (!newPropertyLinks[propertyId].find(l => l.id === link.id)) {
-        newPropertyLinks[propertyId].push(link);
-      }
-    });
-    
-    set({ propertyLinks: newPropertyLinks });
-  },
-
-  setSelectedProperty: (property) => {
-    if (property) {
-      // Ensure the selected property has a valid location
-      const validProperty = {
-        ...property,
-        location: ensureValidLocation(property.location),
-      };
-      set({ selectedProperty: validProperty });
-      get().focusMapOnProperty(validProperty);
-      
-      // Load property details when a property is selected
-      get().loadPropertyDetails(validProperty.id);
-    } else {
-      set({ selectedProperty: null });
-    }
-  },
-
-  setSelectedPerson: (person) => set({ selectedPerson: person }),
-
+  
+  setConnections: (connections) => set({ connections }),
+  setLinks: (links) => set({ links }),
+  setFilteredProperties: (filteredProperties) => set({ filteredProperties }),
+  
+  setSelectedProperty: (property) => set({ selectedProperty: property }),
+  
   setMapViewport: (viewport) => {
     const currentViewport = get().mapViewport;
-    const newViewport = ensureValidViewport({
-      ...currentViewport,
-      ...viewport,
-    });
-
-    console.log('Setting map viewport:', newViewport);
-    set({ mapViewport: newViewport });
-
-    // Save to localStorage
-    try {
-      localStorage.setItem('mapViewport', JSON.stringify(newViewport));
-    } catch (error) {
-      console.error('Error saving map viewport to storage:', error);
-    }
-
-    // Only filter by viewport if live view is enabled
-    if (get().isLiveView) {
-      get().filterProperties();
-    }
-  },
-
-  updateFilters: (partialFilters) => {
-    console.log('Updating filters:', partialFilters);
-    const newFilters = { ...get().filters, ...partialFilters };
-    set({ filters: newFilters });
     
-    // Save to localStorage with proper serialization
-    try {
-      localStorage.setItem('propertyFilters', JSON.stringify(newFilters));
-    } catch (error) {
-      console.error('Error saving filters to storage:', error);
-    }
-    
-    get().filterProperties();
-  },
-
-  updatePersonFilters: (partialFilters) => {
-    const newPersonFilters = { ...get().personFilters, ...partialFilters };
-    set({ personFilters: newPersonFilters });
-    
-    // Save to localStorage
-    try {
-      localStorage.setItem('personFilters', JSON.stringify(newPersonFilters));
-    } catch (error) {
-      console.error('Error saving person filters to storage:', error);
-    }
-    
-    get().filterPersons();
-  },
-
-  resetFilters: () => {
-    console.log('Resetting filters');
-    const defaultFilters = {
-      priceRanges: [],
-      sizeRanges: [],
-      propertyTypes: [],
-      searchQuery: '',
-      tags: [],
-      excludedTags: [],
-      sortBy: 'newest' as SortOption,
-      hasLocation: null,
-      radiusRange: [0, 50000],
-    };
-    set({ filters: defaultFilters });
-    
-    // Save to localStorage
-    try {
-      localStorage.setItem('propertyFilters', JSON.stringify(defaultFilters));
-    } catch (error) {
-      console.error('Error saving reset filters to storage:', error);
-    }
-    
-    get().filterProperties();
-  },
-
-  resetPersonFilters: () => {
-    const defaultPersonFilters = {
-      searchQuery: '',
-      roles: [],
-      hasProperties: null,
-    };
-    set({ personFilters: defaultPersonFilters });
-    
-    // Save to localStorage
-    try {
-      localStorage.setItem('personFilters', JSON.stringify(defaultPersonFilters));
-    } catch (error) {
-      console.error('Error saving reset person filters to storage:', error);
-    }
-    
-    get().filterPersons();
-  },
-
-  toggleSidebar: () => set({ isSidebarOpen: !get().isSidebarOpen }),
-  toggleFilterDrawer: () =>
-    set({ isFilterDrawerOpen: !get().isFilterDrawerOpen }),
-  togglePropertyDetail: (force?: boolean) =>
-    set({
-      isPropertyDetailOpen:
-        force !== undefined ? force : !get().isPropertyDetailOpen,
-    }),
-  setMobileView: (isMobile) => set({ isMobileView: isMobile }),
-  togglePropertyForm: (property?: Property | null) => {
-    // Ensure property has valid location if provided
-    const validProperty = property
-      ? {
-          ...property,
-          location: ensureValidLocation(property.location),
-        }
-      : null;
-
-    set({
-      showPropertyForm: !get().showPropertyForm,
-      editingProperty: validProperty,
-    });
-  },
-  togglePersonForm: (person?: Person | null) =>
-    set({
-      showPersonForm: !get().showPersonForm,
-      editingPerson: person || null,
-    }),
-  setActiveTab: (tab) => {
-    console.log('Setting active tab:', tab);
-    set({ activeTab: tab });
-    
-    // Load appropriate data based on tab
-    if (tab === 'properties') {
-      if (!get().dataLoaded.properties) {
-        get().loadProperties();
+    // Handle bounds parameter specially
+    if (viewport.bounds) {
+      // If bounds is a MapLibre bounds object, extract the coordinates
+      let boundsObj;
+      if (typeof viewport.bounds.getNorth === 'function') {
+        // MapLibre bounds object
+        boundsObj = {
+          north: viewport.bounds.getNorth(),
+          south: viewport.bounds.getSouth(),
+          east: viewport.bounds.getEast(),
+          west: viewport.bounds.getWest(),
+        };
+      } else {
+        // Already a plain object
+        boundsObj = viewport.bounds;
       }
-    } else if (tab === 'persons') {
-      // Load all necessary data for persons tab
-      get().loadAllData();
+      
+      set({
+        mapViewport: {
+          ...currentViewport,
+          ...viewport,
+          bounds: boundsObj,
+        }
+      });
+    } else {
+      // Regular viewport update without bounds
+      const { bounds, ...viewportWithoutBounds } = viewport;
+      set({
+        mapViewport: {
+          ...currentViewport,
+          ...viewportWithoutBounds,
+        }
+      });
     }
   },
-  setFilteredProperties: (properties) => {
-    // Ensure all filtered properties have valid locations
-    const validProperties = properties.map((property) => ({
-      ...property,
-      location: ensureValidLocation(property.location),
+  
+  setMobileView: (isMobile) => set({ isMobileView: isMobile }),
+  setActiveTab: (tab) => set({ activeTab: tab }),
+  setIsLiveView: (isLive) => set({ isLiveView: isLive }),
+
+  // UI Actions
+  toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
+  
+  togglePropertyDetail: (open) => set((state) => ({ 
+    isPropertyDetailOpen: open !== undefined ? open : !state.isPropertyDetailOpen 
+  })),
+  
+  toggleFilterDrawer: () => set((state) => ({ isFilterDrawerOpen: !state.isFilterDrawerOpen })),
+  
+  togglePropertyForm: (property) => set((state) => ({
+    showPropertyForm: !state.showPropertyForm,
+    editingProperty: property || null,
+  })),
+  
+  togglePersonForm: (person) => set((state) => ({
+    showPersonForm: !state.showPersonForm,
+    editingPerson: person || null,
+  })),
+
+  // Filter Actions
+  updateFilters: (newFilters) => {
+    set((state) => ({
+      filters: { ...state.filters, ...newFilters }
     }));
-    set({ filteredProperties: validProperties });
+    get().applyFilters();
   },
-  setIsLiveView: (isLive) => {
-    set({ isLiveView: isLive });
-    get().filterProperties();
+  
+  resetFilters: () => {
+    set({ filters: initialFilters });
+    get().applyFilters();
   },
-  setLoading: (loading) => set({ isLoading: loading }),
-  setError: (error) => set({ error }),
-  setLoadingState: (key, loading) => {
-    set({
-      loadingStates: {
-        ...get().loadingStates,
-        [key]: loading,
-      },
-    });
+  
+  updatePersonFilters: (newFilters) => {
+    set((state) => ({
+      personFilters: { ...state.personFilters, ...newFilters }
+    }));
+    get().applyPersonFilters();
+  },
+  
+  resetPersonFilters: () => {
+    set({ personFilters: initialPersonFilters });
+    get().applyPersonFilters();
   },
 
-  // Optimized API Actions
+  // Data loading actions
   loadProperties: async () => {
-    const { dataLoaded } = get();
-    if (dataLoaded.properties) {
-      console.log('Properties already loaded');
-      return;
-    }
+    set((state) => ({
+      loadingStates: { ...state.loadingStates, properties: true },
+      isLoading: true,
+      error: null,
+    }));
 
     try {
-      console.log('Loading properties...');
-      get().setLoadingState('properties', true);
       const properties = await propertyAPI.getAll();
       console.log('Loaded properties:', properties.length);
-
+      
       // Ensure all properties have valid locations
-      const validProperties = properties.map((property) => ({
+      const validatedProperties = properties.map(property => ({
         ...property,
         location: ensureValidLocation(property.location),
       }));
-
-      set({ 
-        properties: validProperties, 
-        error: null,
-        dataLoaded: { ...get().dataLoaded, properties: true }
-      });
-      get().filterProperties();
-
-      // If we have properties and no current viewport bounds, center on first property with valid location
-      if (validProperties.length > 0 && !get().mapViewport.bounds) {
-        const firstValidProperty = validProperties.find(
-          (p) =>
-            p.location.latitude !== DEFAULT_COORDINATES.latitude ||
-            p.location.longitude !== DEFAULT_COORDINATES.longitude
-        );
-
-        if (firstValidProperty) {
-          get().setMapViewport({
-            latitude: firstValidProperty.location.latitude,
-            longitude: firstValidProperty.location.longitude,
-            zoom: MAP_CONFIG.focusZoom,
-          });
-        }
-      }
+      
+      set({ properties: validatedProperties });
+      get().applyFilters();
     } catch (error) {
       console.error('Failed to load properties:', error);
-      set({
-        error: ERROR_MESSAGES.loadProperties + ': ' + (error as Error).message,
-      });
+      set({ error: 'Failed to load properties' });
     } finally {
-      get().setLoadingState('properties', false);
+      set((state) => ({
+        loadingStates: { ...state.loadingStates, properties: false },
+        isLoading: false,
+      }));
     }
   },
 
   loadPersons: async () => {
-    const { dataLoaded } = get();
-    if (dataLoaded.persons) {
-      console.log('Persons already loaded');
-      return;
-    }
+    set((state) => ({
+      loadingStates: { ...state.loadingStates, persons: true },
+    }));
 
     try {
-      console.log('Loading persons...');
-      get().setLoadingState('persons', true);
       const persons = await personAPI.getAll();
       console.log('Loaded persons:', persons.length);
-
-      set({ 
-        persons, 
-        error: null,
-        dataLoaded: { ...get().dataLoaded, persons: true }
-      });
-      get().filterPersons();
+      set({ persons });
+      get().applyPersonFilters();
     } catch (error) {
       console.error('Failed to load persons:', error);
-      set({
-        error: ERROR_MESSAGES.loadPersons + ': ' + (error as Error).message,
-      });
+      set({ error: 'Failed to load persons' });
     } finally {
-      get().setLoadingState('persons', false);
+      set((state) => ({
+        loadingStates: { ...state.loadingStates, persons: false },
+      }));
     }
   },
 
   loadConnections: async () => {
-    const { dataLoaded } = get();
-    if (dataLoaded.connections) {
-      console.log('Connections already loaded');
-      return;
-    }
+    set((state) => ({
+      loadingStates: { ...state.loadingStates, connections: true },
+    }));
 
     try {
-      console.log('Loading connections...');
-      get().setLoadingState('connections', true);
       const connections = await connectionAPI.getAll();
       console.log('Loaded connections:', connections.length);
-
-      set({ 
-        connections, 
-        error: null,
-        dataLoaded: { ...get().dataLoaded, connections: true }
-      });
-      
-      // Update property-specific caches
-      const propertyConnections: Record<number, Connection[]> = {};
-      connections.forEach(connection => {
-        const propertyId = connection.property_id;
-        if (!propertyConnections[propertyId]) {
-          propertyConnections[propertyId] = [];
-        }
-        propertyConnections[propertyId].push(connection);
-      });
-      
-      set({ propertyConnections });
+      set({ connections });
     } catch (error) {
       console.error('Failed to load connections:', error);
-      set({
-        error: ERROR_MESSAGES.loadConnections + ': ' + (error as Error).message,
-      });
+      set({ error: 'Failed to load connections' });
     } finally {
-      get().setLoadingState('connections', false);
+      set((state) => ({
+        loadingStates: { ...state.loadingStates, connections: false },
+      }));
     }
   },
 
   loadLinks: async () => {
-    const { dataLoaded } = get();
-    if (dataLoaded.links) {
-      console.log('Links already loaded');
-      return;
-    }
+    set((state) => ({
+      loadingStates: { ...state.loadingStates, links: true },
+    }));
 
     try {
-      console.log('Loading links...');
-      get().setLoadingState('links', true);
       const links = await linkAPI.getAll();
       console.log('Loaded links:', links.length);
-
-      set({ 
-        links, 
-        error: null,
-        dataLoaded: { ...get().dataLoaded, links: true }
-      });
-      
-      // Update property-specific caches
-      const propertyLinks: Record<number, Link[]> = {};
-      links.forEach(link => {
-        const propertyId = link.property_id;
-        if (!propertyLinks[propertyId]) {
-          propertyLinks[propertyId] = [];
-        }
-        propertyLinks[propertyId].push(link);
-      });
-      
-      set({ propertyLinks });
+      set({ links });
     } catch (error) {
       console.error('Failed to load links:', error);
-      set({
-        error: ERROR_MESSAGES.loadLinks + ': ' + (error as Error).message,
-      });
+      set({ error: 'Failed to load links' });
     } finally {
-      get().setLoadingState('links', false);
+      set((state) => ({
+        loadingStates: { ...state.loadingStates, links: false },
+      }));
     }
   },
 
   loadAllData: async () => {
     console.log('Loading all data...');
-    const { dataLoaded } = get();
-    
-    const promises = [];
-    
-    if (!dataLoaded.properties) {
-      promises.push(get().loadProperties());
-    }
-    if (!dataLoaded.persons) {
-      promises.push(get().loadPersons());
-    }
-    if (!dataLoaded.connections) {
-      promises.push(get().loadConnections());
-    }
-    if (!dataLoaded.links) {
-      promises.push(get().loadLinks());
-    }
-    
-    if (promises.length > 0) {
-      try {
-        await Promise.all(promises);
-        console.log('All data loaded successfully');
-        
-        // Update property-specific caches with persons
-        get().updatePropertyPersonsCache();
-      } catch (error) {
-        console.error('Failed to load all data:', error);
-      }
-    } else {
-      console.log('All data already loaded');
-      // Still update caches in case they're missing
-      get().updatePropertyPersonsCache();
-    }
-  },
+    set({ isLoading: true, error: null });
 
-  // Helper method to update property persons cache
-  updatePropertyPersonsCache: () => {
-    const { connections, persons } = get();
-    const propertyPersons: Record<number, Person[]> = {};
-    
-    connections.forEach(connection => {
-      const propertyId = connection.property_id;
-      const person = persons.find(p => p.id === connection.person_id);
-      
-      if (person) {
-        if (!propertyPersons[propertyId]) {
-          propertyPersons[propertyId] = [];
-        }
-        // Only add if not already present
-        if (!propertyPersons[propertyId].find(p => p.id === person.id)) {
-          propertyPersons[propertyId].push(person);
-        }
-      }
-    });
-    
-    set({ propertyPersons });
-  },
-
-  // Load property-specific data (connections, links, persons)
-  loadPropertyDetails: async (propertyId: number) => {
-    console.log(`Loading details for property ${propertyId}...`);
-    
-    // Load all data if not already loaded
-    await get().loadAllData();
-    
-    // Property details are now available through the global caches
-    console.log(`Property ${propertyId} details loaded from cache`);
-  },
-
-  createProperty: async (propertyData) => {
     try {
-      get().setLoadingState('creating', true);
-      console.log('Creating property:', propertyData);
+      await Promise.all([
+        get().loadProperties(),
+        get().loadPersons(),
+        get().loadConnections(),
+        get().loadLinks(),
+      ]);
+      console.log('All data loaded successfully');
+    } catch (error) {
+      console.error('Failed to load all data:', error);
+      set({ error: 'Failed to load data' });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
 
-      // Ensure location is valid before creating
-      const validPropertyData = {
-        ...propertyData,
-        location: ensureValidLocation(propertyData.location),
-        rating: propertyData.rating || 0, // Default to 0 if not set
-      };
+  // Property CRUD
+  createProperty: async (propertyData) => {
+    set((state) => ({
+      loadingStates: { ...state.loadingStates, creating: true },
+    }));
 
-      const result = await propertyAPI.create(validPropertyData);
-      console.log('Property created:', result);
+    try {
+      const result = await propertyAPI.create(propertyData);
       if (result.success) {
-        // Reload properties to get the new one
-        set({ dataLoaded: { ...get().dataLoaded, properties: false } });
+        // Reload properties to get the updated list
         await get().loadProperties();
       }
     } catch (error) {
       console.error('Failed to create property:', error);
-      set({
-        error: ERROR_MESSAGES.createProperty + ': ' + (error as Error).message,
-      });
       throw error;
     } finally {
-      get().setLoadingState('creating', false);
+      set((state) => ({
+        loadingStates: { ...state.loadingStates, creating: false },
+      }));
     }
   },
 
   updateProperty: async (property) => {
+    set((state) => ({
+      loadingStates: { ...state.loadingStates, updating: true },
+    }));
+
     try {
-      get().setLoadingState('updating', true);
-      console.log('Updating property:', property);
-
-      // Ensure location is valid before updating
-      const validProperty = {
-        ...property,
-        location: ensureValidLocation(property.location),
-        rating: property.rating || 0, // Default to 0 if not set
-      };
-
-      const result = await propertyAPI.update(validProperty);
-      console.log('Property updated:', result);
+      const result = await propertyAPI.update(property);
       if (result.success) {
         // Update the property in the local state
-        const updatedProperties = get().properties.map(p => 
-          p.id === property.id ? validProperty : p
-        );
-        set({ properties: updatedProperties });
-        get().filterProperties();
-
-        // If this was the selected property, update the selection
-        if (get().selectedProperty?.id === property.id) {
-          set({ selectedProperty: validProperty });
-        }
+        set((state) => {
+          const updatedProperties = state.properties.map(p => 
+            p.id === property.id ? property : p
+          );
+          return { 
+            properties: updatedProperties,
+            selectedProperty: state.selectedProperty?.id === property.id ? property : state.selectedProperty
+          };
+        });
+        get().applyFilters();
       }
     } catch (error) {
       console.error('Failed to update property:', error);
-      set({
-        error: ERROR_MESSAGES.updateProperty + ': ' + (error as Error).message,
-      });
       throw error;
     } finally {
-      get().setLoadingState('updating', false);
+      set((state) => ({
+        loadingStates: { ...state.loadingStates, updating: false },
+      }));
     }
   },
 
   deleteProperty: async (id) => {
+    set((state) => ({
+      loadingStates: { ...state.loadingStates, deleting: true },
+    }));
+
     try {
-      get().setLoadingState('deleting', true);
-      console.log('Deleting property:', id);
-
+      // Delete associated connections and links first
+      await connectionAPI.deleteByPropertyId(id);
+      await linkAPI.deleteByPropertyId(id);
+      
+      // Then delete the property
       const result = await propertyAPI.delete(id);
-      console.log('Property deleted:', result);
-
       if (result.success) {
-        // Remove from local state
-        const updatedProperties = get().properties.filter(p => p.id !== id);
-        set({ properties: updatedProperties });
-        get().filterProperties();
-
-        // Clear property-specific caches
-        const { propertyConnections, propertyLinks, propertyPersons } = get();
-        const newPropertyConnections = { ...propertyConnections };
-        const newPropertyLinks = { ...propertyLinks };
-        const newPropertyPersons = { ...propertyPersons };
-        delete newPropertyConnections[id];
-        delete newPropertyLinks[id];
-        delete newPropertyPersons[id];
-        
-        set({
-          propertyConnections: newPropertyConnections,
-          propertyLinks: newPropertyLinks,
-          propertyPersons: newPropertyPersons
+        set((state) => {
+          const updatedProperties = state.properties.filter(p => p.id !== id);
+          const updatedConnections = state.connections.filter(c => c.property_id !== id);
+          const updatedLinks = state.links.filter(l => l.property_id !== id);
+          
+          return {
+            properties: updatedProperties,
+            connections: updatedConnections,
+            links: updatedLinks,
+            selectedProperty: state.selectedProperty?.id === id ? null : state.selectedProperty,
+            isPropertyDetailOpen: state.selectedProperty?.id === id ? false : state.isPropertyDetailOpen,
+          };
         });
-
-        // Clear selected property if it was deleted
-        if (get().selectedProperty?.id === id) {
-          set({ selectedProperty: null, isPropertyDetailOpen: false });
-        }
+        get().applyFilters();
       }
     } catch (error) {
       console.error('Failed to delete property:', error);
-      set({
-        error: ERROR_MESSAGES.deleteProperty + ': ' + (error as Error).message,
-      });
       throw error;
     } finally {
-      get().setLoadingState('deleting', false);
+      set((state) => ({
+        loadingStates: { ...state.loadingStates, deleting: false },
+      }));
     }
   },
 
+  // Person CRUD
   createPerson: async (personData) => {
+    set((state) => ({
+      loadingStates: { ...state.loadingStates, creating: true },
+    }));
+
     try {
-      get().setLoadingState('creating', true);
-      console.log('Creating person:', personData);
       const result = await personAPI.create(personData);
-      console.log('Person created:', result);
       if (result.success) {
-        // Add to local state
-        const newPerson = { ...personData, id: result.id };
-        set({ persons: [...get().persons, newPerson] });
-        get().filterPersons();
+        await get().loadPersons();
       }
     } catch (error) {
       console.error('Failed to create person:', error);
-      set({
-        error: ERROR_MESSAGES.createPerson + ': ' + (error as Error).message,
-      });
       throw error;
     } finally {
-      get().setLoadingState('creating', false);
+      set((state) => ({
+        loadingStates: { ...state.loadingStates, creating: false },
+      }));
     }
   },
 
   updatePerson: async (person) => {
-    try {
-      get().setLoadingState('updating', true);
-      console.log('Updating person:', person);
-      const result = await personAPI.update(person);
-      console.log('Person updated:', result);
-      if (result.success) {
-        // Update in local state
-        const updatedPersons = get().persons.map(p => 
-          p.id === person.id ? person : p
-        );
-        set({ persons: updatedPersons });
-        get().filterPersons();
+    set((state) => ({
+      loadingStates: { ...state.loadingStates, updating: true },
+    }));
 
-        // Update property-specific caches
-        get().updatePropertyPersonsCache();
+    try {
+      const result = await personAPI.update(person);
+      if (result.success) {
+        set((state) => ({
+          persons: state.persons.map(p => p.id === person.id ? person : p),
+        }));
+        get().applyPersonFilters();
       }
     } catch (error) {
       console.error('Failed to update person:', error);
-      set({
-        error: ERROR_MESSAGES.updatePerson + ': ' + (error as Error).message,
-      });
       throw error;
     } finally {
-      get().setLoadingState('updating', false);
+      set((state) => ({
+        loadingStates: { ...state.loadingStates, updating: false },
+      }));
     }
   },
 
   deletePerson: async (id) => {
+    set((state) => ({
+      loadingStates: { ...state.loadingStates, deleting: true },
+    }));
+
     try {
-      get().setLoadingState('deleting', true);
-      console.log('Deleting person:', id);
-
+      // Delete associated connections first
+      await connectionAPI.deleteByPersonId(id);
+      
+      // Then delete the person
       const result = await personAPI.delete(id);
-      console.log('Person deleted:', result);
-
       if (result.success) {
-        // Remove from local state
-        const updatedPersons = get().persons.filter(p => p.id !== id);
-        set({ persons: updatedPersons });
-        get().filterPersons();
-
-        // Update property-specific caches
-        get().updatePropertyPersonsCache();
+        set((state) => ({
+          persons: state.persons.filter(p => p.id !== id),
+          connections: state.connections.filter(c => c.person_id !== id),
+        }));
+        get().applyPersonFilters();
       }
     } catch (error) {
       console.error('Failed to delete person:', error);
-      set({
-        error: ERROR_MESSAGES.deletePerson + ': ' + (error as Error).message,
-      });
       throw error;
     } finally {
-      get().setLoadingState('deleting', false);
+      set((state) => ({
+        loadingStates: { ...state.loadingStates, deleting: false },
+      }));
     }
   },
 
+  // Connection CRUD
   createConnection: async (connectionData) => {
-    try {
-      get().setLoadingState('creating', true);
-      console.log('Creating connection:', connectionData);
-      const result = await connectionAPI.create(connectionData);
-      console.log('Connection created:', result);
-      if (result.success) {
-        const newConnection = { ...connectionData, id: result.id };
-        
-        // Update global connections
-        set({ connections: [...get().connections, newConnection] });
-        
-        // Update property-specific cache
-        const { propertyConnections } = get();
-        const propertyId = connectionData.property_id;
-        const currentConnections = propertyConnections[propertyId] || [];
-        
-        set({
-          propertyConnections: {
-            ...propertyConnections,
-            [propertyId]: [...currentConnections, newConnection]
-          }
-        });
+    set((state) => ({
+      loadingStates: { ...state.loadingStates, creating: true },
+    }));
 
-        // Update property persons cache
-        get().updatePropertyPersonsCache();
+    try {
+      const result = await connectionAPI.create(connectionData);
+      if (result.success) {
+        await get().loadConnections();
       }
     } catch (error) {
       console.error('Failed to create connection:', error);
-      set({
-        error:
-          ERROR_MESSAGES.createConnection + ': ' + (error as Error).message,
-      });
       throw error;
     } finally {
-      get().setLoadingState('creating', false);
+      set((state) => ({
+        loadingStates: { ...state.loadingStates, creating: false },
+      }));
     }
   },
 
   deleteConnection: async (id) => {
-    try {
-      get().setLoadingState('deleting', true);
-      console.log('Deleting connection:', id);
-      
-      // Find the connection to get property ID
-      const connection = get().connections.find(c => c.id === id);
-      
-      const result = await connectionAPI.delete(id);
-      console.log('Connection deleted:', result);
-      
-      if (result.success) {
-        // Update global connections
-        const updatedConnections = get().connections.filter(c => c.id !== id);
-        set({ connections: updatedConnections });
-        
-        // Update property-specific cache
-        if (connection) {
-          const { propertyConnections } = get();
-          const propertyId = connection.property_id;
-          const updatedPropertyConnections = propertyConnections[propertyId]?.filter(conn => conn.id !== id) || [];
-          
-          set({
-            propertyConnections: {
-              ...propertyConnections,
-              [propertyId]: updatedPropertyConnections
-            }
-          });
-        }
+    set((state) => ({
+      loadingStates: { ...state.loadingStates, deleting: true },
+    }));
 
-        // Update property persons cache
-        get().updatePropertyPersonsCache();
+    try {
+      const result = await connectionAPI.delete(id);
+      if (result.success) {
+        set((state) => ({
+          connections: state.connections.filter(c => c.id !== id),
+        }));
       }
     } catch (error) {
       console.error('Failed to delete connection:', error);
-      set({
-        error:
-          ERROR_MESSAGES.deleteConnection + ': ' + (error as Error).message,
-      });
       throw error;
     } finally {
-      get().setLoadingState('deleting', false);
+      set((state) => ({
+        loadingStates: { ...state.loadingStates, deleting: false },
+      }));
     }
   },
 
+  // Link CRUD
   createLink: async (linkData) => {
+    set((state) => ({
+      loadingStates: { ...state.loadingStates, creating: true },
+    }));
+
     try {
-      get().setLoadingState('creating', true);
-      console.log('Creating link:', linkData);
       const result = await linkAPI.create(linkData);
-      console.log('Link created:', result);
       if (result.success) {
-        const newLink = { ...linkData, id: result.id };
-        
-        // Update global links
-        set({ links: [...get().links, newLink] });
-        
-        // Update property-specific cache
-        const { propertyLinks } = get();
-        const propertyId = linkData.property_id;
-        const currentLinks = propertyLinks[propertyId] || [];
-        
-        set({
-          propertyLinks: {
-            ...propertyLinks,
-            [propertyId]: [...currentLinks, newLink]
-          }
-        });
+        await get().loadLinks();
       }
     } catch (error) {
       console.error('Failed to create link:', error);
-      set({
-        error: ERROR_MESSAGES.createLink + ': ' + (error as Error).message,
-      });
       throw error;
     } finally {
-      get().setLoadingState('creating', false);
+      set((state) => ({
+        loadingStates: { ...state.loadingStates, creating: false },
+      }));
     }
   },
 
   updateLink: async (link) => {
+    set((state) => ({
+      loadingStates: { ...state.loadingStates, updating: true },
+    }));
+
     try {
-      get().setLoadingState('updating', true);
-      console.log('Updating link:', link);
       const result = await linkAPI.update(link);
-      console.log('Link updated:', result);
       if (result.success) {
-        // Update global links
-        const updatedLinks = get().links.map(l => l.id === link.id ? link : l);
-        set({ links: updatedLinks });
-        
-        // Update property-specific cache
-        const { propertyLinks } = get();
-        const propertyId = link.property_id;
-        const currentLinks = propertyLinks[propertyId] || [];
-        const updatedPropertyLinks = currentLinks.map(l => l.id === link.id ? link : l);
-        
-        set({
-          propertyLinks: {
-            ...propertyLinks,
-            [propertyId]: updatedPropertyLinks
-          }
-        });
+        set((state) => ({
+          links: state.links.map(l => l.id === link.id ? link : l),
+        }));
       }
     } catch (error) {
       console.error('Failed to update link:', error);
-      set({
-        error: ERROR_MESSAGES.updateLink + ': ' + (error as Error).message,
-      });
       throw error;
     } finally {
-      get().setLoadingState('updating', false);
+      set((state) => ({
+        loadingStates: { ...state.loadingStates, updating: false },
+      }));
     }
   },
 
   deleteLink: async (id) => {
-    try {
-      get().setLoadingState('deleting', true);
-      console.log('Deleting link:', id);
-      
-      // Find the link to get property ID
-      const link = get().links.find(l => l.id === id);
+    set((state) => ({
+      loadingStates: { ...state.loadingStates, deleting: true },
+    }));
 
+    try {
       const result = await linkAPI.delete(id);
-      console.log('Link deleted:', result);
-      
       if (result.success) {
-        // Update global links
-        const updatedLinks = get().links.filter(l => l.id !== id);
-        set({ links: updatedLinks });
-        
-        // Update property-specific cache
-        if (link) {
-          const { propertyLinks } = get();
-          const propertyId = link.property_id;
-          const updatedPropertyLinks = propertyLinks[propertyId]?.filter(l => l.id !== id) || [];
-          
-          set({
-            propertyLinks: {
-              ...propertyLinks,
-              [propertyId]: updatedPropertyLinks
-            }
-          });
-        }
+        set((state) => ({
+          links: state.links.filter(l => l.id !== id),
+        }));
       }
     } catch (error) {
       console.error('Failed to delete link:', error);
-      set({
-        error: ERROR_MESSAGES.deleteLink + ': ' + (error as Error).message,
-      });
       throw error;
     } finally {
-      get().setLoadingState('deleting', false);
+      set((state) => ({
+        loadingStates: { ...state.loadingStates, deleting: false },
+      }));
     }
   },
 
-  // Enhanced filtering with comprehensive search - SEARCHES ENTIRE DATASET FIRST
-  filterProperties: () => {
-    const {
-      properties,
-      filters,
-      isLiveView,
-      mapViewport,
-      connections,
-      persons,
-    } = get();
+  // Helper functions
+  getPropertyPersons: (propertyId) => {
+    const state = get();
+    const propertyConnections = state.connections.filter(c => c.property_id === propertyId);
+    return propertyConnections.map(connection => 
+      state.persons.find(person => person.id === connection.person_id)
+    ).filter(Boolean) as Person[];
+  },
 
-    console.log('Filtering properties:', {
-      totalProperties: properties.length,
-      filters,
-      isLiveView,
-      hasMapBounds: !!mapViewport.bounds,
-    });
+  getPropertyLinks: (propertyId) => {
+    const state = get();
+    return state.links.filter(link => link.property_id === propertyId);
+  },
 
-    // Start with ALL properties, ensuring they have valid locations
-    let filtered = properties.map((property) => ({
-      ...property,
-      location: ensureValidLocation(property.location),
-    }));
+  getAllTags: () => {
+    const state = get();
+    const allTags = state.properties.flatMap(property => property.tags || []);
+    return Array.from(new Set(allTags)).sort();
+  },
 
-    // CRITICAL: Apply search and other filters to the ENTIRE dataset FIRST
-    filtered = filtered.filter((property) => {
-      // Enhanced comprehensive search (only if query is provided) - SEARCHES ALL FIELDS
-      if (filters.searchQuery && filters.searchQuery.trim()) {
-        if (
-          !searchInProperty(property, filters.searchQuery, connections, persons)
-        ) {
-          return false;
-        }
-      }
+  // Enhanced filtering logic
+  applyFilters: () => {
+    const state = get();
+    const { properties, filters, connections, persons } = state;
 
-      // Filter by multiple price ranges (if any are selected)
-      if (filters.priceRanges.length > 0) {
-        const matchesAnyPriceRange = filters.priceRanges.some(([min, max]) => {
-          return !(property.price_min > max || property.price_max < min);
+    let filtered = [...properties];
+
+    // Search query filter - Enhanced to search across multiple fields
+    if (filters.searchQuery && filters.searchQuery.trim()) {
+      const query = filters.searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(property => {
+        // Search in property fields
+        const propertyMatch = 
+          (property.area?.toLowerCase().includes(query)) ||
+          (property.zone?.toLowerCase().includes(query)) ||
+          (property.type?.toLowerCase().includes(query)) ||
+          (property.description?.toLowerCase().includes(query)) ||
+          (property.note?.toLowerCase().includes(query)) ||
+          (property.tags?.some(tag => tag.toLowerCase().includes(query)));
+
+        // Search in connected persons
+        const propertyConnections = connections.filter(c => c.property_id === property.id);
+        const connectedPersons = propertyConnections.map(conn => 
+          persons.find(person => person.id === conn.person_id)
+        ).filter(Boolean);
+        
+        const personMatch = connectedPersons.some(person => 
+          person?.name?.toLowerCase().includes(query) ||
+          person?.phone?.includes(query) ||
+          person?.alternative_contact?.includes(query) ||
+          person?.role?.toLowerCase().includes(query) ||
+          person?.about?.toLowerCase().includes(query)
+        );
+
+        // Search in connection details
+        const connectionMatch = propertyConnections.some(conn =>
+          conn.role?.toLowerCase().includes(query) ||
+          conn.remark?.toLowerCase().includes(query)
+        );
+
+        return propertyMatch || personMatch || connectionMatch;
+      });
+    }
+
+    // Zone filter - NEW: Apply zone filtering
+    if (filters.zone && filters.zone.trim()) {
+      filtered = filtered.filter(property => 
+        property.zone === filters.zone
+      );
+    }
+
+    // Area filter - NEW: Apply area filtering
+    if (filters.area && filters.area.trim()) {
+      const areaQuery = filters.area.toLowerCase().trim();
+      filtered = filtered.filter(property => 
+        property.area?.toLowerCase().includes(areaQuery)
+      );
+    }
+
+    // Property type filter
+    if (filters.propertyTypes.length > 0) {
+      filtered = filtered.filter(property => 
+        filters.propertyTypes.includes(property.type!)
+      );
+    }
+
+    // Price range filter - Multiple ranges support
+    if (filters.priceRanges.length > 0) {
+      filtered = filtered.filter(property => {
+        return filters.priceRanges.some(([min, max]) => {
+          const propertyMin = property.price_min;
+          const propertyMax = property.price_max;
+          
+          // Check if property price range overlaps with filter range
+          return (propertyMin <= max && propertyMax >= min);
         });
-        if (!matchesAnyPriceRange) {
-          return false;
-        }
-      }
+      });
+    }
 
-      // Filter by multiple size ranges (if any are selected)
-      if (filters.sizeRanges.length > 0) {
-        const matchesAnySizeRange = filters.sizeRanges.some(([min, max]) => {
-          return !(property.size_min > max || property.size_max < min);
+    // Size range filter - Multiple ranges support
+    if (filters.sizeRanges.length > 0) {
+      filtered = filtered.filter(property => {
+        return filters.sizeRanges.some(([min, max]) => {
+          const propertyMin = property.size_min;
+          const propertyMax = property.size_max;
+          
+          // Check if property size range overlaps with filter range
+          return (propertyMin <= max && propertyMax >= min);
         });
-        if (!matchesAnySizeRange) {
-          return false;
-        }
-      }
+      });
+    }
 
-      // Filter by property types (only if types are selected)
-      if (filters.propertyTypes.length > 0) {
-        if (!property.type || !filters.propertyTypes.includes(property.type)) {
-          return false;
-        }
-      }
+    // Rating filter
+    if (filters.rating !== undefined) {
+      filtered = filtered.filter(property => 
+        property.rating >= filters.rating!
+      );
+    }
 
-      // Filter by rating (only if rating is specified)
-      if (filters.rating !== undefined) {
-        if (!property.rating || property.rating < filters.rating) {
-          return false;
-        }
-      }
+    // Tags filter (include)
+    if (filters.tags.length > 0) {
+      filtered = filtered.filter(property => 
+        filters.tags.some(tag => property.tags.includes(tag))
+      );
+    }
 
-      // Filter by included tags (only if tags are selected)
-      if (filters.tags.length > 0) {
-        if (!filters.tags.some((tag) => property.tags.includes(tag))) {
-          return false;
-        }
-      }
+    // Excluded tags filter
+    if (filters.excludedTags.length > 0) {
+      filtered = filtered.filter(property => 
+        !filters.excludedTags.some(tag => property.tags.includes(tag))
+      );
+    }
 
-      // Filter by excluded tags (only if excluded tags are selected)
-      if (filters.excludedTags.length > 0) {
-        if (filters.excludedTags.some((tag) => property.tags.includes(tag))) {
-          return false;
-        }
-      }
-
-      // Filter by location status
-      if (filters.hasLocation !== null) {
+    // Location status filter
+    if (filters.hasLocation !== null) {
+      filtered = filtered.filter(property => {
         const hasValidLocation = 
           property.location.latitude !== DEFAULT_COORDINATES.latitude ||
           property.location.longitude !== DEFAULT_COORDINATES.longitude;
         
-        if (filters.hasLocation !== hasValidLocation) {
-          return false;
-        }
-      }
-
-      // Filter by radius range
-      if (filters.radiusRange[0] > 0 || filters.radiusRange[1] < 50000) {
-        const radius = property.radius || 0;
-        if (radius < filters.radiusRange[0] || radius > filters.radiusRange[1]) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-
-    console.log(
-      'After search and filters:',
-      filtered.length,
-      'out of',
-      properties.length
-    );
-
-    // THEN apply viewport filter if live view is enabled (after search/filters)
-    if (isLiveView && mapViewport.bounds && isValidBounds(mapViewport.bounds)) {
-      const { north, south, east, west } = mapViewport.bounds;
-      filtered = filtered.filter((property) => {
-        const { latitude, longitude } = property.location;
-        return (
-          latitude <= north &&
-          latitude >= south &&
-          longitude <= east &&
-          longitude >= west
-        );
+        return filters.hasLocation ? hasValidLocation : !hasValidLocation;
       });
-      console.log('After viewport filter:', filtered.length);
     }
 
-    // Apply sorting to the final filtered results
-    const sorted = sortProperties(filtered, filters.sortBy);
-
-    console.log(
-      'Final filtered and sorted properties:',
-      sorted.length,
-      'out of',
-      properties.length
-    );
-    set({ filteredProperties: sorted });
-  },
-
-  // Enhanced filtering for persons - SEARCHES ENTIRE DATASET FIRST
-  filterPersons: () => {
-    const { persons, personFilters, connections, properties } = get();
-
-    console.log('Filtering persons:', {
-      totalPersons: persons.length,
-      personFilters,
-    });
-
-    // Start with ALL persons and apply filters to ENTIRE dataset
-    const filtered = persons.filter((person) => {
-      // Enhanced comprehensive search (only if query is provided) - SEARCHES ALL FIELDS
-      if (personFilters.searchQuery && personFilters.searchQuery.trim()) {
-        if (
-          !searchInPerson(
-            person,
-            personFilters.searchQuery,
-            connections,
-            properties
-          )
-        ) {
-          return false;
-        }
-      }
-
-      // Filter by roles
-      if (
-        personFilters.roles.length > 0 &&
-        !personFilters.roles.includes(person.role || '')
-      ) {
-        return false;
-      }
-
-      // Filter by property connection
-      if (personFilters.hasProperties !== null) {
-        const hasConnections = connections.some(
-          (conn) => conn.person_id === person.id
-        );
-        if (personFilters.hasProperties !== hasConnections) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-
-    console.log(
-      'Final filtered persons:',
-      filtered.length,
-      'out of',
-      persons.length
-    );
-    set({ filteredPersons: filtered });
-  },
-
-  getPropertyPersons: (propertyId) => {
-    const { propertyPersons } = get();
-    return propertyPersons[propertyId] || [];
-  },
-
-  getPropertyLinks: (propertyId) => {
-    const { propertyLinks } = get();
-    return propertyLinks[propertyId] || [];
-  },
-
-  focusMapOnProperty: (property) => {
-    const validLocation = ensureValidLocation(property.location);
-    get().setMapViewport({
-      latitude: validLocation.latitude,
-      longitude: validLocation.longitude,
-      zoom: MAP_CONFIG.detailZoom,
-    });
-  },
-
-  getAllTags: () => {
-    const { properties } = get();
-    const allTags = new Set<string>();
-
-    properties.forEach((property) => {
-      property.tags.forEach((tag) => {
-        if (tag.trim()) {
-          allTags.add(tag.trim());
-        }
+    // Radius range filter
+    if (filters.radiusRange && (filters.radiusRange[0] > 0 || filters.radiusRange[1] < 50000)) {
+      filtered = filtered.filter(property => {
+        const radius = property.radius || 0;
+        return radius >= filters.radiusRange[0] && radius <= filters.radiusRange[1];
       });
+    }
+
+    // Sorting
+    filtered.sort((a, b) => {
+      switch (filters.sortBy) {
+        case 'price_asc':
+          return a.price_min - b.price_min;
+        case 'price_desc':
+          return b.price_min - a.price_min;
+        case 'size_asc':
+          return a.size_min - b.size_min;
+        case 'size_desc':
+          return b.size_min - a.size_min;
+        case 'rating_desc':
+          return (b.rating || 0) - (a.rating || 0);
+        case 'oldest':
+          return a.id - b.id; // Assuming lower ID means older
+        case 'newest':
+        default:
+          return b.id - a.id; // Assuming higher ID means newer
+      }
     });
 
-    return Array.from(allTags).sort();
+    set({ filteredProperties: filtered });
+  },
+
+  applyPersonFilters: () => {
+    const state = get();
+    const { persons, personFilters, connections } = state;
+
+    let filtered = [...persons];
+
+    // Search query filter
+    if (personFilters.searchQuery && personFilters.searchQuery.trim()) {
+      const query = personFilters.searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(person => 
+        (person.name?.toLowerCase().includes(query)) ||
+        (person.phone?.includes(query)) ||
+        (person.alternative_contact?.includes(query)) ||
+        (person.role?.toLowerCase().includes(query)) ||
+        (person.about?.toLowerCase().includes(query))
+      );
+    }
+
+    // Role filter
+    if (personFilters.roles.length > 0) {
+      filtered = filtered.filter(person => 
+        personFilters.roles.includes(person.role!)
+      );
+    }
+
+    // Has properties filter
+    if (personFilters.hasProperties !== null) {
+      filtered = filtered.filter(person => {
+        const hasProperties = connections.some(conn => conn.person_id === person.id);
+        return personFilters.hasProperties ? hasProperties : !hasProperties;
+      });
+    }
+
+    set({ filteredPersons: filtered });
   },
 }));

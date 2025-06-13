@@ -246,7 +246,7 @@ const PropertyList: React.FC = () => {
                         }}
                       >
                         <ExternalLink size={12} />
-                        <span>Details</span>
+                        <span>Details ({property.id || ''}) </span>
                       </button>
                       <button
                         className="text-xs text-gray-600 hover:text-gray-800 flex items-center space-x-0.5"

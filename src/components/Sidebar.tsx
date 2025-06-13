@@ -39,6 +39,12 @@ const Sidebar: React.FC = () => {
     // Search query
     if (filters.searchQuery && filters.searchQuery.trim()) count++;
     
+    // Zone filter - NEW: Count zone filter
+    if (filters.zone && filters.zone.trim()) count++;
+    
+    // Area filter - NEW: Count area filter
+    if (filters.area && filters.area.trim()) count++;
+    
     // Price ranges (if any selected)
     if (filters.priceRanges && filters.priceRanges.length > 0) count++;
     
@@ -63,8 +69,8 @@ const Sidebar: React.FC = () => {
     // Location status
     if (filters.hasLocation !== null) count++;
     
-    // Radius ranges (if any selected)
-    if (filters.radiusRanges && filters.radiusRanges.length > 0) count++;
+    // Radius ranges (if not default range)
+    if (filters.radiusRange && (filters.radiusRange[0] > 0 || filters.radiusRange[1] < 50000)) count++;
     
     return count;
   };

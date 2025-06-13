@@ -20,6 +20,7 @@ import {
   Settings,
   Building,
   Link as LinkIcon,
+  Share2,
 } from 'lucide-react';
 import { formatCurrency } from '../utils/formatters';
 import SelectPersonModal from './SelectPersonModal';
@@ -106,6 +107,68 @@ const PropertyDetail: React.FC = () => {
 
   const makeCall = (phone: string) => {
     window.location.href = `tel:${phone}`;
+  };
+
+  // Share property details on WhatsApp
+  const sharePropertyDetails = () => {
+    const sizeText = selectedProperty.size_min === selectedProperty.size_max
+      ? `${Math.round(selectedProperty.size_min)} sq.yd`
+      : `${Math.round(selectedProperty.size_min)} - ${Math.round(selectedProperty.size_max)} sq.yd`;
+
+    const priceText = selectedProperty.price_min === selectedProperty.price_max
+      ? formatCurrency(selectedProperty.price_min)
+      : `${formatCurrency(selectedProperty.price_min)} - ${formatCurrency(selectedProperty.price_max)}`;
+
+    const message = `*Property Details*
+---
+${selectedProperty.id}. ${selectedProperty.type || 'Property'} in ${selectedProperty.area || 'Unknown Area'}
+
+*Size:* ${sizeText}
+*Demand:* ₹${priceText}
+*Zone:* ${selectedProperty.zone || 'Not specified'}
+*Description:* ${selectedProperty.description || 'No description available'}
+---
+
+Contact for more details.`;
+
+    const encodedMessage = encodeURIComponent(message);
+    const whatsappUrl = `https://wa.me/?text=${encodedMessage}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
+  // Share location on WhatsApp
+  const shareLocation = () => {
+    if (!hasValidLocation()) {
+      alert('Location not available for this property');
+      return;
+    }
+
+    const { latitude, longitude } = selectedProperty.location;
+    const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`;
+    
+    const sizeText = selectedProperty.size_min === selectedProperty.size_max
+      ? `${Math.round(selectedProperty.size_min)} sq.yd`
+      : `${Math.round(selectedProperty.size_min)} - ${Math.round(selectedProperty.size_max)} sq.yd`;
+
+    const radiusText = selectedProperty.radius && selectedProperty.radius > 0
+      ? selectedProperty.radius >= 1000
+        ? `${(selectedProperty.radius / 1000).toFixed(1)} km`
+        : `${selectedProperty.radius} meters`
+      : '20 meters';
+
+    const message = `*Property Location*
+---
+${selectedProperty.id}. ${selectedProperty.type || 'Property'} in ${selectedProperty.area || 'Unknown Area'} is Below
+
+*Size:* ${sizeText}
+*Open in Maps:* ${googleMapsUrl}
+
+Location is accurate up to *${radiusText}*
+---`;
+
+    const encodedMessage = encodeURIComponent(message);
+    const whatsappUrl = `https://wa.me/?text=${encodedMessage}`;
+    window.open(whatsappUrl, '_blank');
   };
 
   const handleRemovePersonFromProperty = (
@@ -233,7 +296,8 @@ const PropertyDetail: React.FC = () => {
           <div className="flex items-center justify-between mb-3">
             <div className="flex-1 min-w-0">
               <h2 className="text-lg font-semibold truncate flex items-center gap-1">
-                {selectedProperty.type || 'Property'}
+                               {selectedProperty.id}. 
+  {selectedProperty.type || 'Property'}
                 {Number(selectedProperty.rating) > 0 &&
                   ` - ${selectedProperty.rating}/5`}
               </h2>
@@ -261,7 +325,6 @@ const PropertyDetail: React.FC = () => {
                 title="Navigate with Google Maps"
               >
                 <Navigation size={16} />
-                <span className="hidden sm:inline">Navigate</span>
               </button>
             )}
             <button
@@ -680,6 +743,37 @@ const PropertyDetail: React.FC = () => {
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Sharing Options */}
+            <div className="bg-white border rounded-xl p-4">
+              <h4 className="text-sm font-light mb-3 flex items-center text-gray-900">
+                <Share2 size={14} className="mr-2 text-gray-600" />
+                Share Property
+              </h4>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={sharePropertyDetails}
+                  className="flex items-center justify-center space-x-2 px-4 py-3 bg-green-50 hover:bg-green-100 text-green-700 rounded-lg transition-colors border border-green-200"
+                >
+                  <MessageCircle size={16} />
+                  <span className="text-sm font-medium">Share Details</span>
+                </button>
+                {hasValidLocation() && (
+                  <button
+                    onClick={shareLocation}
+                    className="flex items-center justify-center space-x-2 px-4 py-3 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors border border-blue-200"
+                  >
+                    <MapPin size={16} />
+                    <span className="text-sm font-medium">Share Location</span>
+                  </button>
+                )}
+              </div>
+              {!hasValidLocation() && (
+                <p className="text-xs text-gray-500 mt-2 text-center">
+                  Add location to enable location sharing
+                </p>
+              )}
             </div>
 
             <button

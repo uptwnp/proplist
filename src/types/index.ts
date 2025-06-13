@@ -81,6 +81,8 @@ export interface FilterState {
   sortBy: SortOption;
   hasLocation: boolean | null; // Filter: true = has location, false = no location, null = all
   radiusRange: [number, number]; // Filter: radius range in meters
+  zone?: string; // Zone filter
+  area?: string; // Area filter
 }
 
 export interface PersonFilterState {

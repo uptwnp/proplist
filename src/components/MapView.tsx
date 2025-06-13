@@ -547,7 +547,6 @@ const MapView: React.FC = () => {
                   }}
                 >
                   <Navigation size={12} />
-                  <span>Navigate</span>
                 </button>
               </div>
             </div>

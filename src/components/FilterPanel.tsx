@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { useStore } from '../store/store';
 import {
   X,
@@ -14,6 +14,7 @@ import {
 import { formatCurrency } from '../utils/formatters';
 import {
   PROPERTY_TYPES,
+  PROPERTY_ZONES,
   PRICE_RANGES,
   SIZE_RANGES,
   RADIUS_RANGES,
@@ -33,7 +34,37 @@ const FilterPanel: React.FC = () => {
   const [showRating, setShowRating] = useState(false);
   const [showRadiusRange, setShowRadiusRange] = useState(false);
 
+  // Area filter states
+  const [areaSearchQuery, setAreaSearchQuery] = useState('');
+  const [showAreaSuggestions, setShowAreaSuggestions] = useState(false);
+  const [selectedAreaSuggestionIndex, setSelectedAreaSuggestionIndex] = useState(-1);
+  const areaInputRef = useRef<HTMLInputElement>(null);
+
   const allTags = getAllTags();
+
+  // Get unique areas from all properties
+  const getUniqueAreas = useCallback(() => {
+    const areas = properties
+      .map(p => p.area)
+      .filter(area => area && area.trim() !== '')
+      .map(area => area!.trim());
+    
+    return Array.from(new Set(areas)).sort();
+  }, [properties]);
+
+  // Filter area suggestions based on input
+  const filterAreaSuggestions = useCallback((input: string) => {
+    if (!input.trim()) {
+      return getUniqueAreas().slice(0, 10);
+    }
+
+    const uniqueAreas = getUniqueAreas();
+    const filtered = uniqueAreas.filter(area =>
+      area.toLowerCase().includes(input.toLowerCase())
+    );
+
+    return filtered.slice(0, 10);
+  }, [getUniqueAreas]);
 
   const handlePropertyTypeToggle = (type: (typeof PROPERTY_TYPES)[number]) => {
     const currentTypes = [...filters.propertyTypes];
@@ -46,6 +77,98 @@ const FilterPanel: React.FC = () => {
     }
 
     updateFilters({ propertyTypes: currentTypes });
+  };
+
+  // Handle zone selection
+  const handleZoneChange = (zone: string) => {
+    updateFilters({ zone: zone || undefined });
+  };
+
+  // Handle area filter change
+  const handleAreaFilterChange = (area: string) => {
+    updateFilters({ area: area.trim() || undefined });
+  };
+
+  // Handle area input change
+  const handleAreaSearchChange = (value: string) => {
+    setAreaSearchQuery(value);
+    
+    if (value.trim()) {
+      const suggestions = filterAreaSuggestions(value);
+      setShowAreaSuggestions(suggestions.length > 0);
+    } else {
+      setShowAreaSuggestions(false);
+    }
+    setSelectedAreaSuggestionIndex(-1);
+  };
+
+  // Handle area input focus
+  const handleAreaFocus = () => {
+    const suggestions = filterAreaSuggestions(areaSearchQuery);
+    setShowAreaSuggestions(suggestions.length > 0);
+    setSelectedAreaSuggestionIndex(-1);
+  };
+
+  // Handle area input blur
+  const handleAreaBlur = () => {
+    setTimeout(() => {
+      setShowAreaSuggestions(false);
+      setSelectedAreaSuggestionIndex(-1);
+    }, 150);
+  };
+
+  // Handle area keyboard navigation
+  const handleAreaKeyDown = (e: React.KeyboardEvent) => {
+    const suggestions = filterAreaSuggestions(areaSearchQuery);
+    
+    if (!showAreaSuggestions || suggestions.length === 0) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleAreaFilterChange(areaSearchQuery);
+        setShowAreaSuggestions(false);
+      }
+      return;
+    }
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setSelectedAreaSuggestionIndex(prev => 
+          prev < suggestions.length - 1 ? prev + 1 : 0
+        );
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setSelectedAreaSuggestionIndex(prev => 
+          prev > 0 ? prev - 1 : suggestions.length - 1
+        );
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (selectedAreaSuggestionIndex >= 0) {
+          const selectedArea = suggestions[selectedAreaSuggestionIndex];
+          setAreaSearchQuery(selectedArea);
+          handleAreaFilterChange(selectedArea);
+        } else {
+          handleAreaFilterChange(areaSearchQuery);
+        }
+        setShowAreaSuggestions(false);
+        setSelectedAreaSuggestionIndex(-1);
+        break;
+      case 'Escape':
+        setShowAreaSuggestions(false);
+        setSelectedAreaSuggestionIndex(-1);
+        areaInputRef.current?.blur();
+        break;
+    }
+  };
+
+  // Handle area suggestion click
+  const handleAreaSuggestionClick = (suggestion: string) => {
+    setAreaSearchQuery(suggestion);
+    handleAreaFilterChange(suggestion);
+    setShowAreaSuggestions(false);
+    setSelectedAreaSuggestionIndex(-1);
   };
 
   // Handle multiple price range selection
@@ -189,7 +312,116 @@ const FilterPanel: React.FC = () => {
         </select>
       </div>
 
-      {/* 2. Property Type */}
+      {/* 2. Zone Filter */}
+      <div>
+        <h4 className="text-sm font-medium mb-2">
+          {UI_TEXT.labels.zone}
+          {filters.zone && (
+            <span className="ml-2 bg-purple-100 text-purple-800 text-xs px-2 py-0.5 rounded-full">
+              Selected
+            </span>
+          )}
+        </h4>
+        <select
+          value={filters.zone || ''}
+          onChange={(e) => handleZoneChange(e.target.value)}
+          className="w-full border rounded-md p-2 text-sm"
+        >
+          <option value="">All Zones</option>
+          {PROPERTY_ZONES.map((zone) => (
+            <option key={zone} value={zone}>
+              {zone}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* 3. Area Filter with Suggestions */}
+      <div className="relative">
+        <h4 className="text-sm font-medium mb-2">
+          {UI_TEXT.labels.area}
+          {filters.area && (
+            <span className="ml-2 bg-orange-100 text-orange-800 text-xs px-2 py-0.5 rounded-full">
+              Filtered
+            </span>
+          )}
+        </h4>
+        <div className="relative">
+          <input
+            ref={areaInputRef}
+            type="text"
+            value={areaSearchQuery}
+            onChange={(e) => handleAreaSearchChange(e.target.value)}
+            onFocus={handleAreaFocus}
+            onBlur={handleAreaBlur}
+            onKeyDown={handleAreaKeyDown}
+            className="w-full border rounded-md p-2 pr-8 text-sm"
+            placeholder="Search or type area name..."
+          />
+          <MapPin size={16} className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400" />
+          
+          {/* Clear area filter button */}
+          {filters.area && (
+            <button
+              onClick={() => {
+                setAreaSearchQuery('');
+                handleAreaFilterChange('');
+              }}
+              className="absolute right-8 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              title="Clear area filter"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        {/* Area Suggestions Dropdown */}
+        {showAreaSuggestions && (
+          <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+            {filterAreaSuggestions(areaSearchQuery).map((suggestion, index) => (
+              <button
+                key={suggestion}
+                type="button"
+                onClick={() => handleAreaSuggestionClick(suggestion)}
+                className={`w-full text-left px-3 py-2 hover:bg-gray-100 transition-colors ${
+                  index === selectedAreaSuggestionIndex ? 'bg-blue-50 text-blue-700' : 'text-gray-900'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <MapPin size={14} className="text-gray-400 flex-shrink-0" />
+                  <span className="truncate">{suggestion}</span>
+                </div>
+              </button>
+            ))}
+            {filterAreaSuggestions(areaSearchQuery).length === 0 && areaSearchQuery && (
+              <div className="px-3 py-2 text-gray-500 text-sm">
+                Press Enter to filter by "{areaSearchQuery}"
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Current area filter display */}
+        {filters.area && (
+          <div className="mt-2 flex items-center space-x-2">
+            <span className="text-xs text-gray-500">Filtering by:</span>
+            <span className="inline-flex items-center px-2 py-1 bg-orange-100 text-orange-800 rounded-full text-xs">
+              {filters.area}
+              <button
+                onClick={() => {
+                  setAreaSearchQuery('');
+                  handleAreaFilterChange('');
+                }}
+                className="ml-1 hover:text-orange-900"
+              >
+                <X size={12} />
+              </button>
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* 4. Property Type */}
       <div>
         <h4 className="text-sm font-medium mb-2">
           {UI_TEXT.labels.propertyTypes}
@@ -212,7 +444,7 @@ const FilterPanel: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. Price Range - Multiple Selection */}
+      {/* 5. Price Range - Multiple Selection */}
       <div>
         <h4 className="text-sm font-medium mb-2">
           {UI_TEXT.labels.priceRange}
@@ -240,7 +472,7 @@ const FilterPanel: React.FC = () => {
         </div>
       </div>
 
-      {/* 4. Size Range - Multiple Selection (Collapsed) */}
+      {/* 6. Size Range - Multiple Selection (Collapsed) */}
       <div>
         <div className="flex items-center justify-between mb-2">
           <h4 className="text-sm font-medium">
@@ -283,7 +515,7 @@ const FilterPanel: React.FC = () => {
         )}
       </div>
 
-      {/* 5. Rating (Collapsed) */}
+      {/* 7. Rating (Collapsed) */}
       <div>
         <div className="flex items-center justify-between mb-2">
           <h4 className="text-sm font-medium">{UI_TEXT.labels.rating}</h4>
@@ -329,7 +561,7 @@ const FilterPanel: React.FC = () => {
         )}
       </div>
 
-      {/* 6. Include Tags */}
+      {/* 8. Include Tags */}
       <div>
         <div className="flex items-center justify-between mb-2">
           <h4 className="text-sm font-medium flex items-center">
@@ -409,7 +641,7 @@ const FilterPanel: React.FC = () => {
         )}
       </div>
 
-      {/* 7. Exclude Tags */}
+      {/* 9. Exclude Tags */}
       <div>
         <div className="flex items-center justify-between mb-2">
           <h4 className="text-sm font-medium flex items-center">
@@ -489,7 +721,7 @@ const FilterPanel: React.FC = () => {
         )}
       </div>
 
-      {/* 8. Location Status */}
+      {/* 10. Location Status */}
       <div>
         <h4 className="text-sm font-medium mb-2 flex items-center">
           <MapPin size={16} className="mr-1 text-blue-600" />
@@ -535,7 +767,7 @@ const FilterPanel: React.FC = () => {
         </div>
       </div>
 
-      {/* 9. Radius Coverage (Collapsed) */}
+      {/* 11. Radius Coverage (Collapsed) */}
       <div>
         <div className="flex items-center justify-between mb-2">
           <h4 className="text-sm font-medium flex items-center">
