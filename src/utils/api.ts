@@ -13,7 +13,7 @@ const ensureValidLocation = (location: any) => {
   return location;
 };
 
-// Generic API functions
+// Generic API functions for the new endpoint structure
 async function fetchData(table: string, params: Record<string, any> = {}): Promise<any> {
   const url = new URL(API_CONFIG.baseUrl);
   url.searchParams.append('table', table);
@@ -140,6 +140,82 @@ async function deleteData(table: string, id: number): Promise<any> {
   }
 }
 
+// Transform new API data format to frontend format
+function transformPropertyFromNewAPI(apiData: any): Property {
+  // Handle location field
+  let location = DEFAULT_COORDINATES;
+  if (apiData.location && typeof apiData.location === 'string') {
+    const coords = apiData.location.split(',');
+    const latitude = parseFloat(coords[0]);
+    const longitude = parseFloat(coords[1]);
+    
+    if (!isNaN(latitude) && !isNaN(longitude)) {
+      location = { latitude, longitude };
+    }
+  }
+
+  // Handle tags field
+  let tags: string[] = [];
+  if (apiData.tags) {
+    if (typeof apiData.tags === 'string') {
+      tags = apiData.tags.split(',').filter(Boolean);
+    } else if (Array.isArray(apiData.tags)) {
+      tags = apiData.tags;
+    }
+  }
+
+  return {
+    id: Number(apiData.id),
+    size_min: Number(apiData.size_min) || 0,
+    size_max: Number(apiData.size_max) || 0,
+    price_min: Number(apiData.price_min) || 0,
+    price_max: Number(apiData.price_max) || 0,
+    tags,
+    rating: Number(apiData.rating) || 0,
+    location,
+    radius: Number(apiData.radius) || 0,
+    area: apiData.area || '',
+    zone: apiData.zone || '',
+    description: apiData.description || '',
+    note: apiData.note || '',
+    type: apiData.type || 'Other',
+    created_on: apiData.created_at,
+    updated_on: apiData.updated_at,
+  };
+}
+
+function transformPersonFromNewAPI(apiData: any): Person {
+  return {
+    id: Number(apiData.id),
+    name: apiData.name || '',
+    phone: apiData.phone || '',
+    about: apiData.about || '',
+    role: apiData.role || 'Other Related',
+    alternative_contact: apiData.alternative_contact_details || apiData.alternative_contact || '',
+  };
+}
+
+function transformConnectionFromNewAPI(apiData: any): Connection {
+  return {
+    id: Number(apiData.id),
+    property_id: Number(apiData.property_id),
+    person_id: Number(apiData.person_id),
+    role: apiData.role || 'Other Related',
+    remark: apiData.remark || '',
+  };
+}
+
+function transformLinkFromNewAPI(apiData: any): Link {
+  return {
+    id: Number(apiData.id),
+    property_id: Number(apiData.property_id),
+    link: apiData.link || '',
+    type: apiData.type || 'Other',
+    anchor: apiData.anchor || '',
+    created_at: apiData.created_at,
+  };
+}
+
 // Transform frontend data to backend format
 function transformToBackend(property: Omit<Property, 'id'> | Property): any {
   // Ensure location is always valid before sending to backend
@@ -157,50 +233,32 @@ function transformToBackend(property: Omit<Property, 'id'> | Property): any {
   };
 }
 
-// Transform backend data to frontend format
-function transformFromBackend(apiData: any): any {
-  return {
-    ...apiData,
-    id: Number(apiData.id),
-    // Handle tags field
-    tags: typeof apiData.tags === 'string' ? 
-      apiData.tags.split(',').filter(Boolean) : 
-      (Array.isArray(apiData.tags) ? apiData.tags : []),
-    // Handle location field
-    location: typeof apiData.location === 'string' ? 
-      (() => {
-        const coords = apiData.location.split(',');
-        const latitude = parseFloat(coords[0]);
-        const longitude = parseFloat(coords[1]);
-        
-        // Use backup coordinates if parsing fails or coordinates are invalid
-        if (isNaN(latitude) || isNaN(longitude)) {
-          return DEFAULT_COORDINATES;
-        }
-        
-        return { latitude, longitude };
-      })() : 
-      ensureValidLocation(apiData.location),
-    // Ensure numeric fields
-    size_min: Number(apiData.size_min) || 0,
-    size_max: Number(apiData.size_max) || 0,
-    price_min: Number(apiData.price_min) || 0,
-    price_max: Number(apiData.price_max) || 0,
-    radius: Number(apiData.radius) || 0,
-    rating: Number(apiData.rating) || 0 // Required field
-  };
-}
-
-// Property API functions
+// Property API functions - Updated for new endpoint structure with nested data
 export const propertyAPI = {
   getAll: async (filters: Record<string, any> = {}): Promise<Property[]> => {
     const data = await fetchData(API_CONFIG.tables.properties, filters);
-    return data.map(transformFromBackend);
+    return data.map((item: any) => transformPropertyFromNewAPI(item));
   },
   
-  getById: async (id: number): Promise<Property> => {
+  getById: async (id: number): Promise<{
+    property: Property;
+    persons: Person[];
+    connections: Connection[];
+    links: Link[];
+  }> => {
     const data = await fetchData(API_CONFIG.tables.properties, { id });
-    return transformFromBackend(data[0]);
+    const item = data[0];
+    
+    if (!item) {
+      throw new Error('Property not found');
+    }
+    
+    return {
+      property: transformPropertyFromNewAPI(item),
+      persons: (item.persons || []).map((p: any) => transformPersonFromNewAPI(p)),
+      connections: (item.connections || []).map((c: any) => transformConnectionFromNewAPI(c)),
+      links: (item.links || []).map((l: any) => transformLinkFromNewAPI(l)),
+    };
   },
   
   create: async (property: Omit<Property, 'id'>): Promise<{ success: boolean; id: number }> => {
@@ -220,28 +278,35 @@ export const propertyAPI = {
   
   search: async (query: string, filters: Record<string, any> = {}): Promise<Property[]> => {
     const data = await fetchData(API_CONFIG.tables.properties, { ...filters, area: query });
-    return data.map(transformFromBackend);
+    return data.map((item: any) => transformPropertyFromNewAPI(item));
   }
 };
 
-// Person API functions
+// Person API functions - Updated to handle nested data
 export const personAPI = {
   getAll: async (filters: Record<string, any> = {}): Promise<Person[]> => {
     const data = await fetchData(API_CONFIG.tables.persons, filters);
-    return data.map((person: any) => ({
-      ...person,
-      id: Number(person.id),
-      alternative_contact: person.alternative_contact_details
-    }));
+    return data.map((person: any) => transformPersonFromNewAPI(person));
   },
   
-  getById: async (id: number): Promise<Person> => {
+  getById: async (id: number): Promise<{
+    person: Person;
+    properties: Property[];
+    connections: Connection[];
+    links: Link[];
+  }> => {
     const data = await fetchData(API_CONFIG.tables.persons, { id });
-    const person = data[0];
+    const item = data[0];
+    
+    if (!item) {
+      throw new Error('Person not found');
+    }
+    
     return {
-      ...person,
-      id: Number(person.id),
-      alternative_contact: person.alternative_contact_details
+      person: transformPersonFromNewAPI(item),
+      properties: (item.properties || []).map((p: any) => transformPropertyFromNewAPI(p)),
+      connections: (item.connections || []).map((c: any) => transformConnectionFromNewAPI(c)),
+      links: (item.links || []).map((l: any) => transformLinkFromNewAPI(l)),
     };
   },
   
@@ -262,11 +327,7 @@ export const personAPI = {
   
   search: async (query: string): Promise<Person[]> => {
     const data = await fetchData(API_CONFIG.tables.persons, { name: query });
-    return data.map((person: any) => ({
-      ...person,
-      id: Number(person.id),
-      alternative_contact: person.alternative_contact_details
-    }));
+    return data.map((person: any) => transformPersonFromNewAPI(person));
   }
 };
 
@@ -274,32 +335,17 @@ export const personAPI = {
 export const connectionAPI = {
   getAll: async (filters: Record<string, any> = {}): Promise<Connection[]> => {
     const data = await fetchData(API_CONFIG.tables.connections, filters);
-    return data.map((conn: any) => ({
-      ...conn,
-      id: Number(conn.id),
-      property_id: Number(conn.property_id),
-      person_id: Number(conn.person_id)
-    }));
+    return data.map((conn: any) => transformConnectionFromNewAPI(conn));
   },
   
   getByPropertyId: async (propertyId: number): Promise<Connection[]> => {
     const data = await fetchData(API_CONFIG.tables.connections, { property_id: propertyId });
-    return data.map((conn: any) => ({
-      ...conn,
-      id: Number(conn.id),
-      property_id: Number(conn.property_id),
-      person_id: Number(conn.person_id)
-    }));
+    return data.map((conn: any) => transformConnectionFromNewAPI(conn));
   },
   
   getByPersonId: async (personId: number): Promise<Connection[]> => {
     const data = await fetchData(API_CONFIG.tables.connections, { person_id: personId });
-    return data.map((conn: any) => ({
-      ...conn,
-      id: Number(conn.id),
-      property_id: Number(conn.property_id),
-      person_id: Number(conn.person_id)
-    }));
+    return data.map((conn: any) => transformConnectionFromNewAPI(conn));
   },
   
   create: (connection: Omit<Connection, 'id'>): Promise<{ success: boolean; id: number }> => 
@@ -338,20 +384,12 @@ export const connectionAPI = {
 export const linkAPI = {
   getAll: async (filters: Record<string, any> = {}): Promise<Link[]> => {
     const data = await fetchData(API_CONFIG.tables.links, filters);
-    return data.map((link: any) => ({
-      ...link,
-      id: Number(link.id),
-      property_id: Number(link.property_id)
-    }));
+    return data.map((link: any) => transformLinkFromNewAPI(link));
   },
   
   getByPropertyId: async (propertyId: number): Promise<Link[]> => {
     const data = await fetchData(API_CONFIG.tables.links, { property_id: propertyId });
-    return data.map((link: any) => ({
-      ...link,
-      id: Number(link.id),
-      property_id: Number(link.property_id)
-    }));
+    return data.map((link: any) => transformLinkFromNewAPI(link));
   },
   
   create: (link: Omit<Link, 'id'>): Promise<{ success: boolean; id: number }> => 
@@ -377,24 +415,61 @@ export const linkAPI = {
 
 // Helper function to transform API data (keeping for backward compatibility)
 export const transformApiData = {
-  property: transformFromBackend,
-  
-  person: (apiPerson: any): Person => ({
-    ...apiPerson,
-    id: Number(apiPerson.id),
-    alternative_contact: apiPerson.alternative_contact_details
-  }),
-  
-  connection: (apiConnection: any): Connection => ({
-    ...apiConnection,
-    id: Number(apiConnection.id),
-    property_id: Number(apiConnection.property_id),
-    person_id: Number(apiConnection.person_id)
-  }),
-  
-  link: (apiLink: any): Link => ({
-    ...apiLink,
-    id: Number(apiLink.id),
-    property_id: Number(apiLink.property_id)
-  })
+  property: transformPropertyFromNewAPI,
+  person: transformPersonFromNewAPI,
+  connection: transformConnectionFromNewAPI,
+  link: transformLinkFromNewAPI
+};
+
+// Function to extract all data from the properties response for initial load
+export const extractAllDataFromProperties = async (): Promise<{
+  properties: Property[];
+  persons: Person[];
+  connections: Connection[];
+  links: Link[];
+}> => {
+  try {
+    const propertiesData = await fetchData(API_CONFIG.tables.properties, {});
+    
+    const properties: Property[] = [];
+    const persons: Person[] = [];
+    const connections: Connection[] = [];
+    const links: Link[] = [];
+    
+    const personIds = new Set<number>();
+    
+    propertiesData.forEach((item: any) => {
+      // Extract property
+      properties.push(transformPropertyFromNewAPI(item));
+      
+      // Extract unique persons from nested data if available
+      if (item.persons && Array.isArray(item.persons)) {
+        item.persons.forEach((person: any) => {
+          if (!personIds.has(Number(person.id))) {
+            personIds.add(Number(person.id));
+            persons.push(transformPersonFromNewAPI(person));
+          }
+        });
+      }
+      
+      // Extract connections from nested data if available
+      if (item.connections && Array.isArray(item.connections)) {
+        item.connections.forEach((connection: any) => {
+          connections.push(transformConnectionFromNewAPI(connection));
+        });
+      }
+      
+      // Extract links from nested data if available
+      if (item.links && Array.isArray(item.links)) {
+        item.links.forEach((link: any) => {
+          links.push(transformLinkFromNewAPI(link));
+        });
+      }
+    });
+    
+    return { properties, persons, connections, links };
+  } catch (error) {
+    console.error('Failed to extract all data from properties:', error);
+    throw error;
+  }
 };

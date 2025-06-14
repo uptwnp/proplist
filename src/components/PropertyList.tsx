@@ -17,9 +17,7 @@ import {
 import { formatCurrency } from '../utils/formatters';
 import ConfirmationModal from './ConfirmationModal';
 import LocationUpdateModal from './LocationUpdateModal';
-import { DEFAULT_COORDINATES } from '../constants';
-
-const ITEMS_PER_PAGE = 10;
+import { DEFAULT_COORDINATES, ITEMS_PER_PAGE } from '../constants';
 
 const PropertyList: React.FC = () => {
   const {
@@ -265,6 +263,7 @@ const PropertyList: React.FC = () => {
           )}
         </div>
 
+        {/* Pagination with improved display */}
         {totalPages > 1 && (
           <div className="p-4 border-t bg-white">
             <div className="flex items-center justify-between">
@@ -275,9 +274,12 @@ const PropertyList: React.FC = () => {
               >
                 <ChevronLeft size={16} />
               </button>
-              <span className="text-sm text-gray-600">
-                Page {currentPage} of {totalPages}
-              </span>
+              <div className="text-sm text-gray-600 text-center">
+                <div>Page {currentPage} of {totalPages}</div>
+                <div className="text-xs text-gray-500">
+                  Showing {startIndex + 1}-{Math.min(endIndex, filteredProperties.length)} of {filteredProperties.length}
+                </div>
+              </div>
               <button
                 onClick={() =>
                   setCurrentPage((p) => Math.min(totalPages, p + 1))

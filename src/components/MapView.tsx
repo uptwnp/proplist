@@ -57,11 +57,14 @@ const MapView: React.FC = () => {
     selectedProperty,
     setSelectedProperty,
     togglePropertyDetail,
+    togglePersonDetail,
     togglePropertyForm,
     properties,
     setFilteredProperties,
     isLiveView,
     setIsLiveView,
+    isPropertyDetailOpen,
+    isPersonDetailOpen,
   } = useStore();
 
   const [popupInfo, setPopupInfo] = useState<Property | null>(null);
@@ -80,6 +83,50 @@ const MapView: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('mapSatelliteView', JSON.stringify(isSatelliteView));
   }, [isSatelliteView]);
+
+  // Live View Effect - Update filtered properties based on map bounds
+  useEffect(() => {
+    if (!isLiveView) {
+      // When Live View is turned off, don't call applyFilters here
+      // It's already handled by the handleLiveViewToggle function
+      return;
+    }
+
+    if (!mapViewport.bounds) return;
+
+    const { bounds } = mapViewport;
+    if (!bounds) return;
+
+    // Filter properties that are within the current map bounds
+    const propertiesInView = properties.filter((property) => {
+      const location = ensureValidLocation(property.location);
+      
+      // Skip properties with default coordinates (no real location)
+      if (
+        location.latitude === DEFAULT_COORDINATES.latitude &&
+        location.longitude === DEFAULT_COORDINATES.longitude
+      ) {
+        return false;
+      }
+
+      return (
+        location.latitude >= bounds.south &&
+        location.latitude <= bounds.north &&
+        location.longitude >= bounds.west &&
+        location.longitude <= bounds.east
+      );
+    });
+
+    // Only update if the filtered properties have actually changed
+    if (JSON.stringify(propertiesInView.map(p => p.id)) !== JSON.stringify(filteredProperties.map(p => p.id))) {
+      console.log('Live View: Updating properties in view', {
+        total: properties.length,
+        inView: propertiesInView.length,
+        bounds
+      });
+      setFilteredProperties(propertiesInView);
+    }
+  }, [isLiveView, mapViewport.bounds, properties, setFilteredProperties, filteredProperties]);
 
   // Filter properties to only include those with valid locations
   const validProperties = useMemo(() => {
@@ -359,6 +406,36 @@ const MapView: React.FC = () => {
     return circleGeojson;
   };
 
+  // Handle property detail navigation - close person detail if open
+  const handlePropertyDetailNavigation = (property: Property) => {
+    // Close person detail if it's open
+    if (isPersonDetailOpen) {
+      togglePersonDetail(false);
+    }
+    
+    setSelectedProperty(property);
+    togglePropertyDetail(true);
+  };
+
+  // Handle Live View toggle with improved feedback
+  const handleLiveViewToggle = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    const newLiveViewState = !isLiveView;
+    setIsLiveView(newLiveViewState);
+    
+    // Provide immediate feedback to user
+    console.log(`Live View ${newLiveViewState ? 'enabled' : 'disabled'}`);
+    
+    if (!newLiveViewState) {
+      // When turning off Live View, reapply filters to show all properties
+      // This is handled here in the toggle function, not in the useEffect
+      console.log('Live View disabled: Reapplying filters');
+      // Note: We need to access applyFilters from the store
+      const { applyFilters } = useStore.getState();
+      applyFilters();
+    }
+  };
+
   return (
     <div className="relative w-full h-full">
       <Map
@@ -532,8 +609,7 @@ const MapView: React.FC = () => {
                   className="flex-1 text-xs bg-blue-500 hover:bg-blue-600 text-white py-2 px-3 rounded transition-colors flex items-center justify-center space-x-1"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setSelectedProperty(popupInfo);
-                    togglePropertyDetail(true);
+                    handlePropertyDetailNavigation(popupInfo);
                   }}
                 >
                   <ExternalLink size={12} />
@@ -555,24 +631,33 @@ const MapView: React.FC = () => {
 
         <NavigationControl position="bottom-right" />
 
-        {/* Live view toggle */}
+        {/* Live view toggle with improved styling and feedback */}
         <div className="absolute top-4 left-4 bg-white rounded-md shadow-md p-2">
           <button
-            onClick={(event) => {
-              event.stopPropagation();
-              setIsLiveView(!isLiveView);
-            }}
-            className={`flex items-center space-x-2 px-3 py-1.5 rounded-md transition-colors ${
-              isLiveView ? 'bg-blue-50 text-blue-600' : 'hover:bg-gray-100'
+            onClick={handleLiveViewToggle}
+            className={`flex items-center space-x-2 px-3 py-1.5 rounded-md transition-all duration-200 ${
+              isLiveView 
+                ? 'bg-blue-50 text-blue-600 shadow-sm ring-1 ring-blue-200' 
+                : 'hover:bg-gray-100 text-gray-600'
             }`}
-            title={isLiveView ? 'Live view enabled' : 'Live view disabled'}
+            title={isLiveView 
+              ? `Live view enabled - showing ${validProperties.length} properties in current map view` 
+              : 'Live view disabled - showing all filtered properties'
+            }
           >
             <Eye
               size={18}
-              className={isLiveView ? 'text-blue-600' : 'text-gray-600'}
+              className={`transition-colors ${isLiveView ? 'text-blue-600' : 'text-gray-600'}`}
             />
-            <span className="text-sm">Live View</span>
+            <span className="text-sm font-medium">Live View ({isLiveView 
+              ? `${validProperties.length}`
+              : `${filteredProperties.length}`
+            })</span>
+            {isLiveView && (
+              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+            )}
           </button>
+         
         </div>
 
         {/* Map controls */}

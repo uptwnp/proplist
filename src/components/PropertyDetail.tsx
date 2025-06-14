@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStore } from '../store/store';
 import {
   X,
@@ -21,6 +21,7 @@ import {
   Building,
   Link as LinkIcon,
   Share2,
+  Loader2,
 } from 'lucide-react';
 import { formatCurrency } from '../utils/formatters';
 import SelectPersonModal from './SelectPersonModal';
@@ -46,6 +47,11 @@ const PropertyDetail: React.FC = () => {
     deleteLink,
     properties,
     updateProperty,
+    loadPropertyDetails,
+    loadingStates,
+    setSelectedPerson,
+    togglePersonDetail,
+    isPersonDetailOpen,
   } = useStore();
 
   const [showSelectPerson, setShowSelectPerson] = useState(false);
@@ -58,6 +64,25 @@ const PropertyDetail: React.FC = () => {
     id: number;
     name: string;
   } | null>(null);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+
+  // Load detailed property data when property is selected
+  useEffect(() => {
+    if (selectedProperty && isPropertyDetailOpen) {
+      const loadDetails = async () => {
+        setIsLoadingDetails(true);
+        try {
+          await loadPropertyDetails(selectedProperty.id);
+        } catch (error) {
+          console.error('Failed to load property details:', error);
+        } finally {
+          setIsLoadingDetails(false);
+        }
+      };
+      
+      loadDetails();
+    }
+  }, [selectedProperty?.id, isPropertyDetailOpen, loadPropertyDetails]);
 
   if (!selectedProperty || !isPropertyDetailOpen) return null;
 
@@ -282,6 +307,17 @@ Location is accurate up to *${radiusText}*
     }
   };
 
+  // Handle person click - navigate to person detail and close property detail if needed
+  const handlePersonClick = (person: any) => {
+    // Close property detail if on mobile to make room for person detail
+    if (isMobileView) {
+      togglePropertyDetail(false);
+    }
+    
+    setSelectedPerson(person);
+    togglePersonDetail(true);
+  };
+
   return (
     <>
       <div
@@ -347,6 +383,16 @@ Location is accurate up to *${radiusText}*
           </div>
         </div>
 
+        {/* Loading State */}
+        {isLoadingDetails && (
+          <div className="p-4 flex items-center justify-center">
+            <div className="flex items-center space-x-2">
+              <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+              <span className="text-gray-600">Loading details...</span>
+            </div>
+          </div>
+        )}
+
         {/* Scrollable Content Area */}
         <div className="flex-1 overflow-y-auto">
           <div className="p-4 space-y-6">
@@ -363,7 +409,7 @@ Location is accurate up to *${radiusText}*
                       : `${Math.round(
                           selectedProperty.size_min
                         )} - ${Math.round(
-                          selectedProperty.size_max / 9
+                          selectedProperty.size_max
                         )} sq.yd`}
                   </div>
                 </div>
@@ -574,13 +620,15 @@ Location is accurate up to *${radiusText}*
                     return (
                       <div
                         key={person.id}
-                        className="bg-gray-50 border rounded-lg p-4"
+                        className="bg-gray-50 border rounded-lg p-4 cursor-pointer hover:bg-gray-100 transition-colors"
+                        onClick={() => handlePersonClick(person)}
                       >
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center space-x-3">
                             <div>
-                              <div className="font-semibold text-gray-900">
-                                {person.name}
+                              <div className="font-semibold text-gray-900 flex items-center">
+                                {person.name ?? 'Unknown'}
+                                <ExternalLink size={14} className="ml-2 text-blue-500" />
                               </div>
                               {person.role && (
                                 <div className="text-sm text-gray-500">
@@ -595,12 +643,13 @@ Location is accurate up to *${radiusText}*
                             </div>
                           </div>
                           <button
-                            onClick={() =>
+                            onClick={(e) => {
+                              e.stopPropagation();
                               handleRemovePersonFromProperty(
                                 person.id,
                                 person.name
-                              )
-                            }
+                              );
+                            }}
                             className="text-red-500 hover:text-red-700 p-1 rounded-md hover:bg-red-50 transition-colors"
                             title="Remove person from property"
                           >
@@ -640,21 +689,30 @@ Location is accurate up to *${radiusText}*
                             </span>
                             <div className="flex items-center space-x-1">
                               <button
-                                onClick={() => copyToClipboard(person.phone)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  copyToClipboard(person.phone);
+                                }}
                                 className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
                                 title="Copy number"
                               >
                                 <Copy size={14} />
                               </button>
                               <button
-                                onClick={() => openWhatsApp(person.phone)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openWhatsApp(person.phone);
+                                }}
                                 className="p-2 text-green-500 hover:text-green-700 hover:bg-green-50 rounded-md transition-colors"
                                 title="WhatsApp"
                               >
                                 <MessageCircle size={14} />
                               </button>
                               <button
-                                onClick={() => makeCall(person.phone)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  makeCall(person.phone);
+                                }}
                                 className="p-2 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
                                 title="Call"
                               >
@@ -677,27 +735,30 @@ Location is accurate up to *${radiusText}*
                             </div>
                             <div className="flex items-center space-x-1">
                               <button
-                                onClick={() =>
-                                  copyToClipboard(person.alternative_contact)
-                                }
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  copyToClipboard(person.alternative_contact);
+                                }}
                                 className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
                                 title="Copy number"
                               >
                                 <Copy size={14} />
                               </button>
                               <button
-                                onClick={() =>
-                                  openWhatsApp(person.alternative_contact)
-                                }
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openWhatsApp(person.alternative_contact);
+                                }}
                                 className="p-2 text-green-500 hover:text-green-700 hover:bg-green-50 rounded-md transition-colors"
                                 title="WhatsApp"
                               >
                                 <MessageCircle size={14} />
                               </button>
                               <button
-                                onClick={() =>
-                                  makeCall(person.alternative_contact)
-                                }
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  makeCall(person.alternative_contact);
+                                }}
                                 className="p-2 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
                                 title="Call"
                               >

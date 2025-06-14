@@ -3,11 +3,13 @@ import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import MapView from './components/MapView';
 import PropertyDetail from './components/PropertyDetail';
+import PersonDetail from './components/PersonDetail';
 import MobileFilterDrawer from './components/MobileFilterDrawer';
 import FilterModal from './components/FilterModal';
 import PropertyForm from './components/PropertyForm';
 import PersonForm from './components/PersonForm';
 import { useStore } from './store/store';
+import { APP_VERSION } from './constants';
 
 function App() {
   const { 
@@ -29,6 +31,43 @@ function App() {
   // Use ref to prevent duplicate initial loads
   const hasInitialized = useRef(false);
 
+  // Version management for cache clearing
+  useEffect(() => {
+    const storedVersion = localStorage.getItem('app_version');
+    
+    if (storedVersion !== APP_VERSION) {
+      console.log(`App version updated from ${storedVersion} to ${APP_VERSION}, clearing cache...`);
+      
+      // Clear localStorage except for essential settings
+      const essentialKeys = ['mapSatelliteView'];
+      const keysToKeep: Record<string, string> = {};
+      
+      essentialKeys.forEach(key => {
+        const value = localStorage.getItem(key);
+        if (value) {
+          keysToKeep[key] = value;
+        }
+      });
+      
+      // Clear all localStorage
+      localStorage.clear();
+      
+      // Restore essential keys
+      Object.entries(keysToKeep).forEach(([key, value]) => {
+        localStorage.setItem(key, value);
+      });
+      
+      // Set new version
+      localStorage.setItem('app_version', APP_VERSION);
+      
+      // Clear any cached data in memory by forcing a page reload
+      if (storedVersion) { // Only reload if there was a previous version
+        window.location.reload();
+        return;
+      }
+    }
+  }, []);
+
   // Check for mobile view on mount and window resize
   useEffect(() => {
     const checkMobileView = () => {
@@ -48,13 +87,14 @@ function App() {
   }, [setMobileView]);
   
   // Initialize app with only properties (lazy load everything else)
+  // This is the ONLY place where we call loadProperties on app init
   useEffect(() => {
     if (!hasInitialized.current) {
       hasInitialized.current = true;
       console.log('App initializing - loading only properties initially');
-      loadProperties();
+      loadProperties(); // This now has built-in deduplication
     }
-  }, [loadProperties]);
+  }, []); // Removed loadProperties from dependencies to prevent re-runs
 
   // Show loading state only for initial properties load
   if (isLoading && !hasInitialized.current) {
@@ -63,6 +103,7 @@ function App() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading properties...</p>
+          <p className="text-xs text-gray-500 mt-2">Version {APP_VERSION}</p>
         </div>
       </div>
     );
@@ -88,6 +129,7 @@ function App() {
           >
             Retry
           </button>
+          <p className="text-xs text-gray-500 mt-4">Version {APP_VERSION}</p>
         </div>
       </div>
     );
@@ -109,6 +151,7 @@ function App() {
         </main>
         
         <PropertyDetail />
+        <PersonDetail />
         <MobileFilterDrawer />
         <FilterModal />
         
@@ -125,6 +168,11 @@ function App() {
             onClose={() => togglePersonForm()}
           />
         )}
+      </div>
+      
+      {/* Version indicator in bottom right corner */}
+      <div className="fixed bottom-2 right-2 text-xs text-gray-400 bg-white/80 px-2 py-1 rounded">
+        v{APP_VERSION}
       </div>
     </div>
   );

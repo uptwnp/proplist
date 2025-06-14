@@ -16,21 +16,24 @@ const Sidebar: React.FC = () => {
     toggleFilterDrawer,
     activeTab,
     loadProperties,
-    loadAllData
+    loadPersons
   } = useStore();
 
-  // Load data when sidebar opens or tab changes
+  // Load data when sidebar opens or tab changes - with proper deduplication
   useEffect(() => {
     if (isSidebarOpen) {
       if (activeTab === 'properties') {
-        console.log('Loading properties for properties tab');
-        loadProperties();
+        console.log('Sidebar: Loading properties for properties tab');
+        loadProperties(); // This now has built-in deduplication
       } else if (activeTab === 'persons') {
-        console.log('Loading all data for persons tab');
-        loadAllData();
+        console.log('Sidebar: Loading persons for persons tab');
+        // Only load persons data - connections and links will be loaded on-demand
+        loadPersons().catch(error => {
+          console.error('Failed to load persons:', error);
+        });
       }
     }
-  }, [isSidebarOpen, activeTab, loadProperties, loadAllData]);
+  }, [isSidebarOpen, activeTab, loadProperties, loadPersons]);
 
   // Calculate active filter count for properties
   const getPropertyFilterCount = () => {
@@ -110,65 +113,67 @@ const Sidebar: React.FC = () => {
         
         {activeTab === 'properties' && (
           <>
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Search properties, persons, connections..."
-                className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={filters.searchQuery || ''}
-                onChange={(e) => updateFilters({ searchQuery: e.target.value })}
-              />
-              <Search size={18} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <div className="flex items-center space-x-2 mb-3">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  placeholder="Search properties, persons, connections..."
+                  className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={filters.searchQuery || ''}
+                  onChange={(e) => updateFilters({ searchQuery: e.target.value })}
+                />
+                <Search size={18} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              </div>
+              
+              <button
+                onClick={toggleFilterDrawer}
+                className={`flex items-center justify-center space-x-1 px-3 py-2 rounded-md transition-colors relative flex-shrink-0 ${
+                  activeFilterCount > 0 
+                    ? 'bg-blue-100 hover:bg-blue-200 text-blue-700 border border-blue-300' 
+                    : 'bg-gray-100 hover:bg-gray-200'
+                }`}
+              >
+                <SlidersHorizontal size={16} />
+                {activeFilterCount > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
             </div>
-            
-            <button
-              onClick={toggleFilterDrawer}
-              className={`mt-3 w-full flex items-center justify-center space-x-2 px-4 py-2 rounded-md transition-colors relative ${
-                activeFilterCount > 0 
-                  ? 'bg-blue-100 hover:bg-blue-200 text-blue-700 border border-blue-300' 
-                  : 'bg-gray-100 hover:bg-gray-200'
-              }`}
-            >
-              <SlidersHorizontal size={16} />
-              <span>Filters</span>
-              {activeFilterCount > 0 && (
-                <span className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium">
-                  {activeFilterCount}
-                </span>
-              )}
-            </button>
           </>
         )}
 
         {activeTab === 'persons' && (
           <>
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Search persons, properties, connections..."
-                className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={personFilters.searchQuery || ''}
-                onChange={(e) => updatePersonFilters({ searchQuery: e.target.value })}
-              />
-              <Search size={18} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <div className="flex items-center space-x-2 mb-3">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  placeholder="Search persons by name, phone, role..."
+                  className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={personFilters.searchQuery || ''}
+                  onChange={(e) => updatePersonFilters({ searchQuery: e.target.value })}
+                />
+                <Search size={18} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              </div>
+              
+              <button
+                onClick={toggleFilterDrawer}
+                className={`flex items-center justify-center space-x-1 px-3 py-2 rounded-md transition-colors relative flex-shrink-0 ${
+                  activeFilterCount > 0 
+                    ? 'bg-blue-100 hover:bg-blue-200 text-blue-700 border border-blue-300' 
+                    : 'bg-gray-100 hover:bg-gray-200'
+                }`}
+              >
+                <SlidersHorizontal size={16} />
+                {activeFilterCount > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
             </div>
-            
-            <button
-              onClick={toggleFilterDrawer}
-              className={`mt-3 w-full flex items-center justify-center space-x-2 px-4 py-2 rounded-md transition-colors relative ${
-                activeFilterCount > 0 
-                  ? 'bg-blue-100 hover:bg-blue-200 text-blue-700 border border-blue-300' 
-                  : 'bg-gray-100 hover:bg-gray-200'
-              }`}
-            >
-              <SlidersHorizontal size={16} />
-              <span>Filters</span>
-              {activeFilterCount > 0 && (
-                <span className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium">
-                  {activeFilterCount}
-                </span>
-              )}
-            </button>
           </>
         )}
       </div>

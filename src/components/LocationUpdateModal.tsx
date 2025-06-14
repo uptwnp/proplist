@@ -6,7 +6,7 @@ import Map, { Marker, NavigationControl, Source, Layer } from 'react-map-gl';
 import maplibreGl from 'maplibre-gl';
 import circle from '@turf/circle';
 import { point } from '@turf/helpers';
-import { MAP_CONFIG, PROPERTY_ZONES, ERROR_MESSAGES } from '../constants';
+import { MAP_CONFIG, PROPERTY_ZONES, ERROR_MESSAGES, DEFAULT_COORDINATES } from '../constants';
 
 interface LocationUpdateModalProps {
   property: Property;
@@ -481,15 +481,30 @@ const LocationUpdateModal: React.FC<LocationUpdateModalProps> = ({ property, onC
     await geocodeLocation(suggestion);
   };
 
-  // Auto-search when modal opens if property has zone
+  // Check if property has valid location (not default coordinates)
+  const hasValidLocation = () => {
+    if (!property.location) return false;
+    
+    const { latitude, longitude } = property.location;
+    return (
+      latitude !== DEFAULT_COORDINATES.latitude ||
+      longitude !== DEFAULT_COORDINATES.longitude
+    );
+  };
+
+  // Auto-search when modal opens - UPDATED: Only if property has zone AND no valid location
   useEffect(() => {
     const performAutoSearch = async () => {
-      if (property.zone && property.zone !== 'Other' && property.zone.trim() && !hasAutoSearched) {
+      if (property.zone && 
+          property.zone !== 'Other' && 
+          property.zone.trim() && 
+          !hasAutoSearched &&
+          !hasValidLocation()) { // Only auto-search if location doesn't exist
         const searchTerm = `${property.zone}, Panipat`;
         setSearchQuery(searchTerm);
         setHasAutoSearched(true);
         
-        console.log('Auto-searching for zone:', searchTerm);
+        console.log('Auto-searching for zone (no existing location):', searchTerm);
         await geocodeLocation(searchTerm);
       }
     };
