@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useStore } from '../store/store';
+import React, { useState, useEffect } from "react";
+import { useStore } from "../store/store";
 import {
   X,
   MapPin,
@@ -22,14 +22,14 @@ import {
   Link as LinkIcon,
   Share2,
   Loader2,
-} from 'lucide-react';
-import { formatCurrency } from '../utils/formatters';
-import SelectPersonModal from './SelectPersonModal';
-import ConfirmationModal from './ConfirmationModal';
-import LocationUpdateModal from './LocationUpdateModal';
-import TagManagementModal from './TagManagementModal';
-import LinkModal from './LinkModal';
-import { DEFAULT_COORDINATES } from '../constants';
+} from "lucide-react";
+import { formatCurrency } from "../utils/formatters";
+import SelectPersonModal from "./SelectPersonModal";
+import ConfirmationModal from "./ConfirmationModal";
+import LocationUpdateModal from "./LocationUpdateModal";
+import TagManagementModal from "./TagManagementModal";
+import LinkModal from "./LinkModal";
+import { DEFAULT_COORDINATES } from "../constants";
 
 const PropertyDetail: React.FC = () => {
   const {
@@ -60,7 +60,7 @@ const PropertyDetail: React.FC = () => {
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [editingLink, setEditingLink] = useState<any>(null);
   const [confirmDelete, setConfirmDelete] = useState<{
-    type: 'connection' | 'property' | 'link';
+    type: "connection" | "property" | "link";
     id: number;
     name: string;
   } | null>(null);
@@ -74,12 +74,12 @@ const PropertyDetail: React.FC = () => {
         try {
           await loadPropertyDetails(selectedProperty.id);
         } catch (error) {
-          console.error('Failed to load property details:', error);
+          console.error("Failed to load property details:", error);
         } finally {
           setIsLoadingDetails(false);
         }
       };
-      
+
       loadDetails();
     }
   }, [selectedProperty?.id, isPropertyDetailOpen, loadPropertyDetails]);
@@ -105,7 +105,7 @@ const PropertyDetail: React.FC = () => {
   // Check if property has valid location (not default coordinates)
   const hasValidLocation = () => {
     if (!selectedProperty.location) return false;
-    
+
     const { latitude, longitude } = selectedProperty.location;
     return (
       latitude !== DEFAULT_COORDINATES.latitude ||
@@ -116,7 +116,7 @@ const PropertyDetail: React.FC = () => {
   const openInGoogleMaps = () => {
     const { latitude, longitude } = selectedProperty.location;
     const url = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`;
-    window.open(url, '_blank');
+    window.open(url, "_blank");
   };
 
   const copyToClipboard = (text: string) => {
@@ -125,9 +125,9 @@ const PropertyDetail: React.FC = () => {
   };
 
   const openWhatsApp = (phone: string) => {
-    const cleanPhone = phone.replace(/\D/g, '');
+    const cleanPhone = phone.replace(/\D/g, "");
     const url = `https://wa.me/91${cleanPhone}`;
-    window.open(url, '_blank');
+    window.open(url, "_blank");
   };
 
   const makeCall = (phone: string) => {
@@ -136,54 +136,68 @@ const PropertyDetail: React.FC = () => {
 
   // Share property details on WhatsApp
   const sharePropertyDetails = () => {
-    const sizeText = selectedProperty.size_min === selectedProperty.size_max
-      ? `${Math.round(selectedProperty.size_min)} sq.yd`
-      : `${Math.round(selectedProperty.size_min)} - ${Math.round(selectedProperty.size_max)} sq.yd`;
+    const sizeText =
+      selectedProperty.size_min === selectedProperty.size_max
+        ? `${Math.round(selectedProperty.size_min)} sq.yd`
+        : `${Math.round(selectedProperty.size_min)} - ${Math.round(
+            selectedProperty.size_max
+          )} sq.yd`;
 
-    const priceText = selectedProperty.price_min === selectedProperty.price_max
-      ? formatCurrency(selectedProperty.price_min)
-      : `${formatCurrency(selectedProperty.price_min)} - ${formatCurrency(selectedProperty.price_max)}`;
+    const priceText =
+      selectedProperty.price_min === selectedProperty.price_max
+        ? formatCurrency(selectedProperty.price_min)
+        : `${formatCurrency(selectedProperty.price_min)} - ${formatCurrency(
+            selectedProperty.price_max
+          )}`;
 
     const message = `*Property Details*
 ---
-${selectedProperty.id}. ${selectedProperty.type || 'Property'} in ${selectedProperty.area || 'Unknown Area'}
+${selectedProperty.id}. ${selectedProperty.type || "Property"} in ${
+      selectedProperty.area || "Unknown Area"
+    }
 
 *Size:* ${sizeText}
 *Demand:* ₹${priceText}
-*Zone:* ${selectedProperty.zone || 'Not specified'}
-*Description:* ${selectedProperty.description || 'No description available'}
+*Zone:* ${selectedProperty.zone || "Not specified"}
+*Description:* ${selectedProperty.description || "No description available"}
 ---
 
 Contact for more details.`;
 
     const encodedMessage = encodeURIComponent(message);
     const whatsappUrl = `https://wa.me/?text=${encodedMessage}`;
-    window.open(whatsappUrl, '_blank');
+    window.open(whatsappUrl, "_blank");
   };
 
   // Share location on WhatsApp
   const shareLocation = () => {
     if (!hasValidLocation()) {
-      alert('Location not available for this property');
+      alert("Location not available for this property");
       return;
     }
 
     const { latitude, longitude } = selectedProperty.location;
     const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`;
-    
-    const sizeText = selectedProperty.size_min === selectedProperty.size_max
-      ? `${Math.round(selectedProperty.size_min)} sq.yd`
-      : `${Math.round(selectedProperty.size_min)} - ${Math.round(selectedProperty.size_max)} sq.yd`;
 
-    const radiusText = selectedProperty.radius && selectedProperty.radius > 0
-      ? selectedProperty.radius >= 1000
-        ? `${(selectedProperty.radius / 1000).toFixed(1)} km`
-        : `${selectedProperty.radius} meters`
-      : '20 meters';
+    const sizeText =
+      selectedProperty.size_min === selectedProperty.size_max
+        ? `${Math.round(selectedProperty.size_min)} sq.yd`
+        : `${Math.round(selectedProperty.size_min)} - ${Math.round(
+            selectedProperty.size_max
+          )} sq.yd`;
+
+    const radiusText =
+      selectedProperty.radius && selectedProperty.radius > 0
+        ? selectedProperty.radius >= 1000
+          ? `${(selectedProperty.radius / 1000).toFixed(1)} km`
+          : `${selectedProperty.radius} meters`
+        : "20 meters";
 
     const message = `*Property Location*
 ---
-${selectedProperty.id}. ${selectedProperty.type || 'Property'} in ${selectedProperty.area || 'Unknown Area'} is Below
+${selectedProperty.id}. ${selectedProperty.type || "Property"} in ${
+      selectedProperty.area || "Unknown Area"
+    } is Below
 
 *Size:* ${sizeText}
 *Open in Maps:* ${googleMapsUrl}
@@ -193,7 +207,7 @@ Location is accurate up to *${radiusText}*
 
     const encodedMessage = encodeURIComponent(message);
     const whatsappUrl = `https://wa.me/?text=${encodedMessage}`;
-    window.open(whatsappUrl, '_blank');
+    window.open(whatsappUrl, "_blank");
   };
 
   const handleRemovePersonFromProperty = (
@@ -201,7 +215,7 @@ Location is accurate up to *${radiusText}*
     personName: string
   ) => {
     setConfirmDelete({
-      type: 'connection',
+      type: "connection",
       id: personId,
       name: personName,
     });
@@ -209,17 +223,17 @@ Location is accurate up to *${radiusText}*
 
   const handleDeleteProperty = () => {
     setConfirmDelete({
-      type: 'property',
+      type: "property",
       id: selectedProperty.id,
-      name: selectedProperty.area || 'this property',
+      name: selectedProperty.area || "this property",
     });
   };
 
   const handleDeleteLink = (linkId: number, linkAnchor: string) => {
     setConfirmDelete({
-      type: 'link',
+      type: "link",
       id: linkId,
-      name: linkAnchor || 'this link',
+      name: linkAnchor || "this link",
     });
   };
 
@@ -227,7 +241,7 @@ Location is accurate up to *${radiusText}*
     if (!confirmDelete) return;
 
     try {
-      if (confirmDelete.type === 'connection') {
+      if (confirmDelete.type === "connection") {
         // Find the connection to delete
         const connectionToDelete = connections.find(
           (conn) =>
@@ -237,13 +251,13 @@ Location is accurate up to *${radiusText}*
         if (connectionToDelete) {
           await deleteConnection(connectionToDelete.id);
         }
-      } else if (confirmDelete.type === 'property') {
+      } else if (confirmDelete.type === "property") {
         await deleteProperty(confirmDelete.id);
-      } else if (confirmDelete.type === 'link') {
+      } else if (confirmDelete.type === "link") {
         await deleteLink(confirmDelete.id);
       }
     } catch (error) {
-      console.error('Failed to delete:', error);
+      console.error("Failed to delete:", error);
     }
 
     setConfirmDelete(null);
@@ -252,7 +266,7 @@ Location is accurate up to *${radiusText}*
   // Helper function to format radius display
   const formatLocationText = () => {
     if (!selectedProperty.radius || selectedProperty.radius === 0) {
-      return 'Add';
+      return "Add";
     }
     return `Edit`;
   };
@@ -280,27 +294,27 @@ Location is accurate up to *${radiusText}*
       await updateProperty(updatedProperty);
       // The store will automatically update the selectedProperty
     } catch (error) {
-      console.error('Failed to update tags:', error);
+      console.error("Failed to update tags:", error);
     }
   };
 
   const openLink = (url: string) => {
-    window.open(url, '_blank', 'noopener,noreferrer');
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   const getLinkIcon = (type?: string) => {
     switch (type) {
-      case 'Website':
+      case "Website":
         return <ExternalLink size={16} />;
-      case 'Social Media':
+      case "Social Media":
         return <MessageCircle size={16} />;
-      case 'Document':
+      case "Document":
         return <FileText size={16} />;
-      case 'Image':
+      case "Image":
         return <Tag size={16} />;
-      case 'Video':
+      case "Video":
         return <Tag size={16} />;
-      case 'Map':
+      case "Map":
         return <MapPin size={16} />;
       default:
         return <LinkIcon size={16} />;
@@ -313,7 +327,7 @@ Location is accurate up to *${radiusText}*
     if (isMobileView) {
       togglePropertyDetail(false);
     }
-    
+
     setSelectedPerson(person);
     togglePersonDetail(true);
   };
@@ -323,8 +337,8 @@ Location is accurate up to *${radiusText}*
       <div
         className={`bg-white shadow-xl z-30 flex flex-col ${
           isMobileView
-            ? 'fixed inset-x-0 bottom-0 rounded-t-2xl max-h-[90vh]'
-            : 'fixed top-14 right-0 bottom-0 w-1/3 border-l'
+            ? "fixed inset-x-0 bottom-0 rounded-t-2xl max-h-[90vh]"
+            : "fixed top-14 right-0 bottom-0 w-1/3 border-l"
         }`}
       >
         {/* Header with gradient background - Fixed */}
@@ -332,14 +346,13 @@ Location is accurate up to *${radiusText}*
           <div className="flex items-center justify-between mb-3">
             <div className="flex-1 min-w-0">
               <h2 className="text-lg font-semibold truncate flex items-center gap-1">
-                               {selectedProperty.id}. 
-  {selectedProperty.type || 'Property'}
+                {selectedProperty.id}.{selectedProperty.type || "Property"}
                 {Number(selectedProperty.rating) > 0 &&
                   ` - ${selectedProperty.rating}/5`}
               </h2>
 
               <p className="text-blue-100 text-sm truncate">
-                {selectedProperty.area || 'Property'}
+                {selectedProperty.area || "Property"}
               </p>
             </div>
             <button
@@ -408,9 +421,7 @@ Location is accurate up to *${radiusText}*
                       ? `${Math.round(selectedProperty.size_min)} sq.yd`
                       : `${Math.round(
                           selectedProperty.size_min
-                        )} - ${Math.round(
-                          selectedProperty.size_max
-                        )} sq.yd`}
+                        )} - ${Math.round(selectedProperty.size_max)} sq.yd`}
                   </div>
                 </div>
                 <div className="flex-1 bg-white p-3 rounded-lg border">
@@ -544,7 +555,7 @@ Location is accurate up to *${radiusText}*
                               {getLinkIcon(link.type)}
                             </div>
                             <span className="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded">
-                              {link.type || 'Link'}
+                              {link.type || "Link"}
                             </span>
                           </div>
                           <button
@@ -627,8 +638,11 @@ Location is accurate up to *${radiusText}*
                           <div className="flex items-center space-x-3">
                             <div>
                               <div className="font-semibold text-gray-900 flex items-center">
-                                {person.name ?? 'Unknown'}
-                                <ExternalLink size={14} className="ml-2 text-blue-500" />
+                                {person.name ?? "Unknown"}
+                                <ExternalLink
+                                  size={14}
+                                  className="ml-2 text-blue-500"
+                                />
                               </div>
                               {person.role && (
                                 <div className="text-sm text-gray-500">
@@ -723,21 +737,23 @@ Location is accurate up to *${radiusText}*
                         )}
 
                         {/* Alternative contact if available */}
-                        {person.alternative_contact && (
+                        {person.alternative_contact_details && (
                           <div className="flex items-center justify-between bg-white p-3 rounded-lg border mb-2">
                             <div>
                               <span className="text-xs text-gray-500 uppercase tracking-wide">
-                                Alt:{' '}
+                                Alt:{" "}
                               </span>
                               <span className="text-sm font-mono text-gray-900">
-                                {person.alternative_contact}
+                                {person.alternative_contact_details}
                               </span>
                             </div>
                             <div className="flex items-center space-x-1">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  copyToClipboard(person.alternative_contact);
+                                  copyToClipboard(
+                                    person.alternative_contact_details
+                                  );
                                 }}
                                 className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
                                 title="Copy number"
@@ -747,7 +763,9 @@ Location is accurate up to *${radiusText}*
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  openWhatsApp(person.alternative_contact);
+                                  openWhatsApp(
+                                    person.alternative_contact_details
+                                  );
                                 }}
                                 className="p-2 text-green-500 hover:text-green-700 hover:bg-green-50 rounded-md transition-colors"
                                 title="WhatsApp"
@@ -757,7 +775,7 @@ Location is accurate up to *${radiusText}*
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  makeCall(person.alternative_contact);
+                                  makeCall(person.alternative_contact_details);
                                 }}
                                 className="p-2 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
                                 title="Call"
@@ -799,7 +817,7 @@ Location is accurate up to *${radiusText}*
                 <div className="bg-gray-50 p-3 rounded-lg">
                   <div className="text-sm text-gray-500 mb-1">Coordinates</div>
                   <div className="font-mono text-sm text-gray-900">
-                    {selectedProperty.location.latitude.toFixed(6)}°N,{' '}
+                    {selectedProperty.location.latitude.toFixed(6)}°N,{" "}
                     {selectedProperty.location.longitude.toFixed(6)}°E
                   </div>
                 </div>
@@ -889,25 +907,25 @@ Location is accurate up to *${radiusText}*
       <ConfirmationModal
         isOpen={!!confirmDelete}
         title={
-          confirmDelete?.type === 'connection'
-            ? 'Remove Person Connection'
-            : confirmDelete?.type === 'property'
-            ? 'Delete Property'
-            : 'Delete Link'
+          confirmDelete?.type === "connection"
+            ? "Remove Person Connection"
+            : confirmDelete?.type === "property"
+            ? "Delete Property"
+            : "Delete Link"
         }
         message={
-          confirmDelete?.type === 'connection'
+          confirmDelete?.type === "connection"
             ? `Are you sure you want to remove ${confirmDelete.name} from this property? This action cannot be undone.`
-            : confirmDelete?.type === 'property'
+            : confirmDelete?.type === "property"
             ? `Are you sure you want to delete "${confirmDelete?.name}"? This will permanently remove the property and all its connections. This action cannot be undone.`
             : `Are you sure you want to delete the link "${confirmDelete?.name}"? This action cannot be undone.`
         }
         confirmText={
-          confirmDelete?.type === 'connection'
-            ? 'Remove'
-            : confirmDelete?.type === 'property'
-            ? 'Delete Property'
-            : 'Delete Link'
+          confirmDelete?.type === "connection"
+            ? "Remove"
+            : confirmDelete?.type === "property"
+            ? "Delete Property"
+            : "Delete Link"
         }
         onConfirm={confirmDeleteAction}
         onCancel={() => setConfirmDelete(null)}

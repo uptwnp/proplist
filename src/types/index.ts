@@ -1,12 +1,8 @@
-import { 
-  PROPERTY_TYPES, 
-  PERSON_ROLES,
-  CONNECTION_ROLES
-} from '../constants';
+import { PROPERTY_TYPES, PERSON_ROLES, CONNECTION_ROLES } from "../constants";
 
-export type PropertyType = typeof PROPERTY_TYPES[number];
-export type PersonRole = typeof PERSON_ROLES[number];
-export type ConnectionRole = typeof CONNECTION_ROLES[number];
+export type PropertyType = (typeof PROPERTY_TYPES)[number];
+export type PersonRole = (typeof PERSON_ROLES)[number];
+export type ConnectionRole = (typeof CONNECTION_ROLES)[number];
 
 export interface Property {
   id: number;
@@ -36,7 +32,7 @@ export interface Person {
   phone: string;
   about?: string;
   role?: PersonRole;
-  alternative_contact?: string;
+  alternative_contact_details?: string;
 }
 
 export interface Connection {
@@ -68,7 +64,14 @@ export interface MapViewport {
   };
 }
 
-export type SortOption = 'price_asc' | 'price_desc' | 'size_asc' | 'size_desc' | 'rating_desc' | 'newest' | 'oldest';
+export type SortOption =
+  | "price_asc"
+  | "price_desc"
+  | "size_asc"
+  | "size_desc"
+  | "rating_desc"
+  | "newest"
+  | "oldest";
 
 export interface FilterState {
   priceRanges: [number, number][]; // Support multiple price ranges

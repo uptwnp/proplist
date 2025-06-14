@@ -1,15 +1,32 @@
-import { create } from 'zustand';
-import { Property, Person, Connection, Link, FilterState, PersonFilterState, MapViewport, SortOption } from '../types';
-import { propertyAPI, personAPI, connectionAPI, linkAPI, extractAllDataFromProperties } from '../utils/api';
-import { DEFAULT_COORDINATES, PRICE_RANGES, SIZE_RANGES } from '../constants';
+import { create } from "zustand";
+import {
+  Property,
+  Person,
+  Connection,
+  Link,
+  FilterState,
+  PersonFilterState,
+  MapViewport,
+  SortOption,
+} from "../types";
+import {
+  propertyAPI,
+  personAPI,
+  connectionAPI,
+  linkAPI,
+  extractAllDataFromProperties,
+} from "../utils/api";
+import { DEFAULT_COORDINATES, PRICE_RANGES, SIZE_RANGES } from "../constants";
 
 // Helper function to ensure valid location
 const ensureValidLocation = (location: any) => {
-  if (!location || 
-      typeof location.latitude !== 'number' || 
-      typeof location.longitude !== 'number' ||
-      isNaN(location.latitude) || 
-      isNaN(location.longitude)) {
+  if (
+    !location ||
+    typeof location.latitude !== "number" ||
+    typeof location.longitude !== "number" ||
+    isNaN(location.latitude) ||
+    isNaN(location.longitude)
+  ) {
     return DEFAULT_COORDINATES;
   }
   return location;
@@ -31,11 +48,11 @@ interface Store {
   persons: Person[];
   connections: Connection[];
   links: Link[];
-  
+
   // Filtered data
   filteredProperties: Property[];
   filteredPersons: Person[];
-  
+
   // UI State
   selectedProperty: Property | null;
   selectedPerson: Person | null;
@@ -48,21 +65,21 @@ interface Store {
   showPersonForm: boolean;
   editingProperty: Property | null;
   editingPerson: Person | null;
-  activeTab: 'properties' | 'persons';
+  activeTab: "properties" | "persons";
   isLiveView: boolean;
-  
+
   // Map state
   mapViewport: MapViewport;
-  
+
   // Filters
   filters: FilterState;
   personFilters: PersonFilterState;
-  
+
   // Loading states
   loadingStates: LoadingStates;
   isLoading: boolean;
   error: string | null;
-  
+
   // Data loading flags to prevent duplicate requests
   dataLoadingPromises: {
     properties: Promise<void> | null;
@@ -71,7 +88,7 @@ interface Store {
     links: Promise<void> | null;
     allData: Promise<void> | null;
   };
-  
+
   // Actions
   setProperties: (properties: Property[]) => void;
   setPersons: (persons: Person[]) => void;
@@ -82,9 +99,9 @@ interface Store {
   setSelectedPerson: (person: Person | null) => void;
   setMapViewport: (viewport: Partial<MapViewport>) => void;
   setMobileView: (isMobile: boolean) => void;
-  setActiveTab: (tab: 'properties' | 'persons') => void;
+  setActiveTab: (tab: "properties" | "persons") => void;
   setIsLiveView: (isLive: boolean) => void;
-  
+
   // UI Actions
   toggleSidebar: () => void;
   togglePropertyDetail: (open?: boolean) => void;
@@ -92,13 +109,13 @@ interface Store {
   toggleFilterDrawer: () => void;
   togglePropertyForm: (property?: Property) => void;
   togglePersonForm: (person?: Person) => void;
-  
+
   // Filter Actions
   updateFilters: (newFilters: Partial<FilterState>) => void;
   resetFilters: () => void;
   updatePersonFilters: (newFilters: Partial<PersonFilterState>) => void;
   resetPersonFilters: () => void;
-  
+
   // Data Actions
   loadProperties: () => Promise<void>;
   loadPersons: () => Promise<void>;
@@ -107,22 +124,22 @@ interface Store {
   loadAllData: () => Promise<void>;
   loadPropertyDetails: (id: number) => Promise<void>;
   loadPersonDetails: (id: number) => Promise<void>;
-  
-  createProperty: (property: Omit<Property, 'id'>) => Promise<void>;
+
+  createProperty: (property: Omit<Property, "id">) => Promise<void>;
   updateProperty: (property: Property) => Promise<void>;
   deleteProperty: (id: number) => Promise<void>;
-  
-  createPerson: (person: Omit<Person, 'id'>) => Promise<void>;
+
+  createPerson: (person: Omit<Person, "id">) => Promise<void>;
   updatePerson: (person: Person) => Promise<void>;
   deletePerson: (id: number) => Promise<void>;
-  
-  createConnection: (connection: Omit<Connection, 'id'>) => Promise<void>;
+
+  createConnection: (connection: Omit<Connection, "id">) => Promise<void>;
   deleteConnection: (id: number) => Promise<void>;
-  
-  createLink: (link: Omit<Link, 'id'>)=> Promise<void>;
+
+  createLink: (link: Omit<Link, "id">) => Promise<void>;
   updateLink: (link: Link) => Promise<void>;
   deleteLink: (id: number) => Promise<void>;
-  
+
   // Helper functions
   getPropertyPersons: (propertyId: number) => Person[];
   getPropertyLinks: (propertyId: number) => Link[];
@@ -137,11 +154,11 @@ const initialFilters: FilterState = {
   priceRanges: [],
   sizeRanges: [],
   propertyTypes: [],
-  searchQuery: '',
+  searchQuery: "",
   tags: [],
   excludedTags: [],
   rating: undefined,
-  sortBy: 'newest',
+  sortBy: "newest",
   hasLocation: null,
   radiusRange: [0, 50000],
   zone: undefined,
@@ -149,7 +166,7 @@ const initialFilters: FilterState = {
 };
 
 const initialPersonFilters: PersonFilterState = {
-  searchQuery: '',
+  searchQuery: "",
   roles: [],
   hasProperties: null,
 };
@@ -189,7 +206,7 @@ export const useStore = create<Store>((set, get) => ({
   showPersonForm: false,
   editingProperty: null,
   editingPerson: null,
-  activeTab: 'properties',
+  activeTab: "properties",
   isLiveView: false, // Changed from true to false - Live View off by default
   mapViewport: initialMapViewport,
   filters: initialFilters,
@@ -213,7 +230,7 @@ export const useStore = create<Store>((set, get) => ({
       get().applyFilters();
     }
   },
-  
+
   setPersons: (persons) => {
     set({ persons });
     const state = get();
@@ -221,20 +238,20 @@ export const useStore = create<Store>((set, get) => ({
       get().applyPersonFilters();
     }
   },
-  
+
   setConnections: (connections) => set({ connections }),
   setLinks: (links) => set({ links }),
   setFilteredProperties: (filteredProperties) => set({ filteredProperties }),
-  
+
   setSelectedProperty: (property) => set({ selectedProperty: property }),
   setSelectedPerson: (person) => set({ selectedPerson: person }),
-  
+
   setMapViewport: (viewport) => {
     const currentViewport = get().mapViewport;
-    
+
     if (viewport.bounds) {
       let boundsObj;
-      if (typeof viewport.bounds.getNorth === 'function') {
+      if (typeof viewport.bounds.getNorth === "function") {
         boundsObj = {
           north: viewport.bounds.getNorth(),
           south: viewport.bounds.getSouth(),
@@ -244,13 +261,13 @@ export const useStore = create<Store>((set, get) => ({
       } else {
         boundsObj = viewport.bounds;
       }
-      
+
       set({
         mapViewport: {
           ...currentViewport,
           ...viewport,
           bounds: boundsObj,
-        }
+        },
       });
     } else {
       const { bounds, ...viewportWithoutBounds } = viewport;
@@ -258,58 +275,65 @@ export const useStore = create<Store>((set, get) => ({
         mapViewport: {
           ...currentViewport,
           ...viewportWithoutBounds,
-        }
+        },
       });
     }
   },
-  
+
   setMobileView: (isMobile) => set({ isMobileView: isMobile }),
   setActiveTab: (tab) => set({ activeTab: tab }),
   setIsLiveView: (isLive) => set({ isLiveView: isLive }),
 
   // UI Actions
-  toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
-  
-  togglePropertyDetail: (open) => set((state) => ({ 
-    isPropertyDetailOpen: open !== undefined ? open : !state.isPropertyDetailOpen 
-  })),
-  
-  togglePersonDetail: (open) => set((state) => ({ 
-    isPersonDetailOpen: open !== undefined ? open : !state.isPersonDetailOpen 
-  })),
-  
-  toggleFilterDrawer: () => set((state) => ({ isFilterDrawerOpen: !state.isFilterDrawerOpen })),
-  
-  togglePropertyForm: (property) => set((state) => ({
-    showPropertyForm: !state.showPropertyForm,
-    editingProperty: property || null,
-  })),
-  
-  togglePersonForm: (person) => set((state) => ({
-    showPersonForm: !state.showPersonForm,
-    editingPerson: person || null,
-  })),
+  toggleSidebar: () =>
+    set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
+
+  togglePropertyDetail: (open) =>
+    set((state) => ({
+      isPropertyDetailOpen:
+        open !== undefined ? open : !state.isPropertyDetailOpen,
+    })),
+
+  togglePersonDetail: (open) =>
+    set((state) => ({
+      isPersonDetailOpen: open !== undefined ? open : !state.isPersonDetailOpen,
+    })),
+
+  toggleFilterDrawer: () =>
+    set((state) => ({ isFilterDrawerOpen: !state.isFilterDrawerOpen })),
+
+  togglePropertyForm: (property) =>
+    set((state) => ({
+      showPropertyForm: !state.showPropertyForm,
+      editingProperty: property || null,
+    })),
+
+  togglePersonForm: (person) =>
+    set((state) => ({
+      showPersonForm: !state.showPersonForm,
+      editingPerson: person || null,
+    })),
 
   // Filter Actions
   updateFilters: (newFilters) => {
     set((state) => ({
-      filters: { ...state.filters, ...newFilters }
+      filters: { ...state.filters, ...newFilters },
     }));
     get().applyFilters();
   },
-  
+
   resetFilters: () => {
     set({ filters: initialFilters });
     get().applyFilters();
   },
-  
+
   updatePersonFilters: (newFilters) => {
     set((state) => ({
-      personFilters: { ...state.personFilters, ...newFilters }
+      personFilters: { ...state.personFilters, ...newFilters },
     }));
     get().applyPersonFilters();
   },
-  
+
   resetPersonFilters: () => {
     set({ personFilters: initialPersonFilters });
     get().applyPersonFilters();
@@ -318,19 +342,19 @@ export const useStore = create<Store>((set, get) => ({
   // Data loading actions with deduplication
   loadProperties: async () => {
     const state = get();
-    
+
     if (state.dataLoadingPromises.properties) {
-      console.log('Properties already loading, returning existing promise');
+      console.log("Properties already loading, returning existing promise");
       return state.dataLoadingPromises.properties;
     }
 
     if (state.properties.length > 0 && !state.loadingStates.properties) {
-      console.log('Properties already loaded, skipping');
+      console.log("Properties already loaded, skipping");
       return Promise.resolve();
     }
 
-    console.log('Starting properties load...');
-    
+    console.log("Starting properties load...");
+
     const loadPromise = (async () => {
       set((state) => ({
         loadingStates: { ...state.loadingStates, properties: true },
@@ -340,29 +364,35 @@ export const useStore = create<Store>((set, get) => ({
 
       try {
         const properties = await propertyAPI.getAll();
-        console.log('Loaded properties:', properties.length);
-        
-        const validatedProperties = properties.map(property => ({
+        console.log("Loaded properties:", properties.length);
+
+        const validatedProperties = properties.map((property) => ({
           ...property,
           location: ensureValidLocation(property.location),
         }));
-        
+
         set({ properties: validatedProperties });
         get().applyFilters();
       } catch (error) {
-        console.error('Failed to load properties:', error);
-        set({ error: 'Failed to load properties' });
+        console.error("Failed to load properties:", error);
+        set({ error: "Failed to load properties" });
       } finally {
         set((state) => ({
           loadingStates: { ...state.loadingStates, properties: false },
           isLoading: false,
-          dataLoadingPromises: { ...state.dataLoadingPromises, properties: null },
+          dataLoadingPromises: {
+            ...state.dataLoadingPromises,
+            properties: null,
+          },
         }));
       }
     })();
 
     set((state) => ({
-      dataLoadingPromises: { ...state.dataLoadingPromises, properties: loadPromise }
+      dataLoadingPromises: {
+        ...state.dataLoadingPromises,
+        properties: loadPromise,
+      },
     }));
 
     return loadPromise;
@@ -370,18 +400,18 @@ export const useStore = create<Store>((set, get) => ({
 
   loadPersons: async () => {
     const state = get();
-    
+
     if (state.dataLoadingPromises.persons) {
-      console.log('Persons already loading, returning existing promise');
+      console.log("Persons already loading, returning existing promise");
       return state.dataLoadingPromises.persons;
     }
 
     if (state.persons.length > 0 && !state.loadingStates.persons) {
-      console.log('Persons already loaded, skipping');
+      console.log("Persons already loaded, skipping");
       return Promise.resolve();
     }
 
-    console.log('Starting persons load...');
+    console.log("Starting persons load...");
 
     const loadPromise = (async () => {
       set((state) => ({
@@ -390,12 +420,12 @@ export const useStore = create<Store>((set, get) => ({
 
       try {
         const persons = await personAPI.getAll();
-        console.log('Loaded persons:', persons.length);
+        console.log("Loaded persons:", persons.length);
         set({ persons });
         get().applyPersonFilters();
       } catch (error) {
-        console.error('Failed to load persons:', error);
-        set({ error: 'Failed to load persons' });
+        console.error("Failed to load persons:", error);
+        set({ error: "Failed to load persons" });
       } finally {
         set((state) => ({
           loadingStates: { ...state.loadingStates, persons: false },
@@ -405,7 +435,10 @@ export const useStore = create<Store>((set, get) => ({
     })();
 
     set((state) => ({
-      dataLoadingPromises: { ...state.dataLoadingPromises, persons: loadPromise }
+      dataLoadingPromises: {
+        ...state.dataLoadingPromises,
+        persons: loadPromise,
+      },
     }));
 
     return loadPromise;
@@ -413,18 +446,18 @@ export const useStore = create<Store>((set, get) => ({
 
   loadConnections: async () => {
     const state = get();
-    
+
     if (state.dataLoadingPromises.connections) {
-      console.log('Connections already loading, returning existing promise');
+      console.log("Connections already loading, returning existing promise");
       return state.dataLoadingPromises.connections;
     }
 
     if (state.connections.length > 0 && !state.loadingStates.connections) {
-      console.log('Connections already loaded, skipping');
+      console.log("Connections already loaded, skipping");
       return Promise.resolve();
     }
 
-    console.log('Starting connections load...');
+    console.log("Starting connections load...");
 
     const loadPromise = (async () => {
       set((state) => ({
@@ -433,21 +466,27 @@ export const useStore = create<Store>((set, get) => ({
 
       try {
         const connections = await connectionAPI.getAll();
-        console.log('Loaded connections:', connections.length);
+        console.log("Loaded connections:", connections.length);
         set({ connections });
       } catch (error) {
-        console.error('Failed to load connections:', error);
-        set({ error: 'Failed to load connections' });
+        console.error("Failed to load connections:", error);
+        set({ error: "Failed to load connections" });
       } finally {
         set((state) => ({
           loadingStates: { ...state.loadingStates, connections: false },
-          dataLoadingPromises: { ...state.dataLoadingPromises, connections: null },
+          dataLoadingPromises: {
+            ...state.dataLoadingPromises,
+            connections: null,
+          },
         }));
       }
     })();
 
     set((state) => ({
-      dataLoadingPromises: { ...state.dataLoadingPromises, connections: loadPromise }
+      dataLoadingPromises: {
+        ...state.dataLoadingPromises,
+        connections: loadPromise,
+      },
     }));
 
     return loadPromise;
@@ -455,18 +494,18 @@ export const useStore = create<Store>((set, get) => ({
 
   loadLinks: async () => {
     const state = get();
-    
+
     if (state.dataLoadingPromises.links) {
-      console.log('Links already loading, returning existing promise');
+      console.log("Links already loading, returning existing promise");
       return state.dataLoadingPromises.links;
     }
 
     if (state.links.length > 0 && !state.loadingStates.links) {
-      console.log('Links already loaded, skipping');
+      console.log("Links already loaded, skipping");
       return Promise.resolve();
     }
 
-    console.log('Starting links load...');
+    console.log("Starting links load...");
 
     const loadPromise = (async () => {
       set((state) => ({
@@ -475,11 +514,11 @@ export const useStore = create<Store>((set, get) => ({
 
       try {
         const links = await linkAPI.getAll();
-        console.log('Loaded links:', links.length);
+        console.log("Loaded links:", links.length);
         set({ links });
       } catch (error) {
-        console.error('Failed to load links:', error);
-        set({ error: 'Failed to load links' });
+        console.error("Failed to load links:", error);
+        set({ error: "Failed to load links" });
       } finally {
         set((state) => ({
           loadingStates: { ...state.loadingStates, links: false },
@@ -489,7 +528,7 @@ export const useStore = create<Store>((set, get) => ({
     })();
 
     set((state) => ({
-      dataLoadingPromises: { ...state.dataLoadingPromises, links: loadPromise }
+      dataLoadingPromises: { ...state.dataLoadingPromises, links: loadPromise },
     }));
 
     return loadPromise;
@@ -497,46 +536,47 @@ export const useStore = create<Store>((set, get) => ({
 
   loadAllData: async () => {
     const state = get();
-    
+
     if (state.dataLoadingPromises.allData) {
-      console.log('All data already loading, returning existing promise');
+      console.log("All data already loading, returning existing promise");
       return state.dataLoadingPromises.allData;
     }
 
-    console.log('Loading all data from API...');
-    
+    console.log("Loading all data from API...");
+
     const loadPromise = (async () => {
       set({ isLoading: true, error: null });
 
       try {
-        const { properties, persons, connections, links } = await extractAllDataFromProperties();
-        
-        console.log('Loaded all data:', {
+        const { properties, persons, connections, links } =
+          await extractAllDataFromProperties();
+
+        console.log("Loaded all data:", {
           properties: properties.length,
           persons: persons.length,
           connections: connections.length,
-          links: links.length
+          links: links.length,
         });
-        
-        const validatedProperties = properties.map(property => ({
+
+        const validatedProperties = properties.map((property) => ({
           ...property,
           location: ensureValidLocation(property.location),
         }));
-        
+
         set({
           properties: validatedProperties,
           persons,
           connections,
           links,
         });
-        
+
         get().applyFilters();
         get().applyPersonFilters();
-        
-        console.log('All data loaded successfully');
+
+        console.log("All data loaded successfully");
       } catch (error) {
-        console.error('Failed to load all data:', error);
-        set({ error: 'Failed to load data' });
+        console.error("Failed to load all data:", error);
+        set({ error: "Failed to load data" });
       } finally {
         set((state) => ({
           isLoading: false,
@@ -546,7 +586,10 @@ export const useStore = create<Store>((set, get) => ({
     })();
 
     set((state) => ({
-      dataLoadingPromises: { ...state.dataLoadingPromises, allData: loadPromise }
+      dataLoadingPromises: {
+        ...state.dataLoadingPromises,
+        allData: loadPromise,
+      },
     }));
 
     return loadPromise;
@@ -555,35 +598,39 @@ export const useStore = create<Store>((set, get) => ({
   // Load detailed data for a specific property
   loadPropertyDetails: async (id: number) => {
     try {
-      const { property, persons, connections, links } = await propertyAPI.getById(id);
-      
+      const { property, persons, connections, links } =
+        await propertyAPI.getById(id);
+
       // Update the property in the store with validated location
       const validatedProperty = {
         ...property,
         location: ensureValidLocation(property.location),
       };
-      
+
       set((state) => {
-        const updatedProperties = state.properties.map(p => 
+        const updatedProperties = state.properties.map((p) =>
           p.id === id ? validatedProperty : p
         );
-        
+
         // Merge new persons, connections, and links
-        const existingPersonIds = new Set(state.persons.map(p => p.id));
-        const newPersons = persons.filter(p => !existingPersonIds.has(p.id));
-        
+        const existingPersonIds = new Set(state.persons.map((p) => p.id));
+        const newPersons = persons.filter((p) => !existingPersonIds.has(p.id));
+
         return {
           properties: updatedProperties,
           persons: [...state.persons, ...newPersons],
-          connections: [...state.connections.filter(c => c.property_id !== id), ...connections],
-          links: [...state.links.filter(l => l.property_id !== id), ...links],
+          connections: [
+            ...state.connections.filter((c) => c.property_id !== id),
+            ...connections,
+          ],
+          links: [...state.links.filter((l) => l.property_id !== id), ...links],
           selectedProperty: validatedProperty,
         };
       });
-      
+
       get().applyFilters();
     } catch (error) {
-      console.error('Failed to load property details:', error);
+      console.error("Failed to load property details:", error);
       throw error;
     }
   },
@@ -591,34 +638,45 @@ export const useStore = create<Store>((set, get) => ({
   // Load detailed data for a specific person
   loadPersonDetails: async (id: number) => {
     try {
-      const { person, properties, connections, links } = await personAPI.getById(id);
-      
+      const { person, properties, connections, links } =
+        await personAPI.getById(id);
+
       // Update the person in the store
       set((state) => {
-        const updatedPersons = state.persons.map(p => 
+        const updatedPersons = state.persons.map((p) =>
           p.id === id ? person : p
         );
-        
+
         // Merge new properties, connections, and links
-        const existingPropertyIds = new Set(state.properties.map(p => p.id));
-        const newProperties = properties.filter(p => !existingPropertyIds.has(p.id)).map(property => ({
-          ...property,
-          location: ensureValidLocation(property.location),
-        }));
-        
+        const existingPropertyIds = new Set(state.properties.map((p) => p.id));
+        const newProperties = properties
+          .filter((p) => !existingPropertyIds.has(p.id))
+          .map((property) => ({
+            ...property,
+            location: ensureValidLocation(property.location),
+          }));
+
         return {
           persons: updatedPersons,
           properties: [...state.properties, ...newProperties],
-          connections: [...state.connections.filter(c => c.person_id !== id), ...connections],
-          links: [...state.links, ...links.filter(l => !state.links.some(existing => existing.id === l.id))],
+          connections: [
+            ...state.connections.filter((c) => c.person_id !== id),
+            ...connections,
+          ],
+          links: [
+            ...state.links,
+            ...links.filter(
+              (l) => !state.links.some((existing) => existing.id === l.id)
+            ),
+          ],
           selectedPerson: person,
         };
       });
-      
+
       get().applyFilters();
       get().applyPersonFilters();
     } catch (error) {
-      console.error('Failed to load person details:', error);
+      console.error("Failed to load person details:", error);
       throw error;
     }
   },
@@ -635,7 +693,7 @@ export const useStore = create<Store>((set, get) => ({
         await get().loadProperties();
       }
     } catch (error) {
-      console.error('Failed to create property:', error);
+      console.error("Failed to create property:", error);
       throw error;
     } finally {
       set((state) => ({
@@ -653,18 +711,21 @@ export const useStore = create<Store>((set, get) => ({
       const result = await propertyAPI.update(property);
       if (result.success) {
         set((state) => {
-          const updatedProperties = state.properties.map(p => 
+          const updatedProperties = state.properties.map((p) =>
             p.id === property.id ? property : p
           );
-          return { 
+          return {
             properties: updatedProperties,
-            selectedProperty: state.selectedProperty?.id === property.id ? property : state.selectedProperty
+            selectedProperty:
+              state.selectedProperty?.id === property.id
+                ? property
+                : state.selectedProperty,
           };
         });
         get().applyFilters();
       }
     } catch (error) {
-      console.error('Failed to update property:', error);
+      console.error("Failed to update property:", error);
       throw error;
     } finally {
       set((state) => ({
@@ -681,26 +742,32 @@ export const useStore = create<Store>((set, get) => ({
     try {
       await connectionAPI.deleteByPropertyId(id);
       await linkAPI.deleteByPropertyId(id);
-      
+
       const result = await propertyAPI.delete(id);
       if (result.success) {
         set((state) => {
-          const updatedProperties = state.properties.filter(p => p.id !== id);
-          const updatedConnections = state.connections.filter(c => c.property_id !== id);
-          const updatedLinks = state.links.filter(l => l.property_id !== id);
-          
+          const updatedProperties = state.properties.filter((p) => p.id !== id);
+          const updatedConnections = state.connections.filter(
+            (c) => c.property_id !== id
+          );
+          const updatedLinks = state.links.filter((l) => l.property_id !== id);
+
           return {
             properties: updatedProperties,
             connections: updatedConnections,
             links: updatedLinks,
-            selectedProperty: state.selectedProperty?.id === id ? null : state.selectedProperty,
-            isPropertyDetailOpen: state.selectedProperty?.id === id ? false : state.isPropertyDetailOpen,
+            selectedProperty:
+              state.selectedProperty?.id === id ? null : state.selectedProperty,
+            isPropertyDetailOpen:
+              state.selectedProperty?.id === id
+                ? false
+                : state.isPropertyDetailOpen,
           };
         });
         get().applyFilters();
       }
     } catch (error) {
-      console.error('Failed to delete property:', error);
+      console.error("Failed to delete property:", error);
       throw error;
     } finally {
       set((state) => ({
@@ -721,7 +788,7 @@ export const useStore = create<Store>((set, get) => ({
         await get().loadPersons();
       }
     } catch (error) {
-      console.error('Failed to create person:', error);
+      console.error("Failed to create person:", error);
       throw error;
     } finally {
       set((state) => ({
@@ -739,13 +806,16 @@ export const useStore = create<Store>((set, get) => ({
       const result = await personAPI.update(person);
       if (result.success) {
         set((state) => ({
-          persons: state.persons.map(p => p.id === person.id ? person : p),
-          selectedPerson: state.selectedPerson?.id === person.id ? person : state.selectedPerson,
+          persons: state.persons.map((p) => (p.id === person.id ? person : p)),
+          selectedPerson:
+            state.selectedPerson?.id === person.id
+              ? person
+              : state.selectedPerson,
         }));
         get().applyPersonFilters();
       }
     } catch (error) {
-      console.error('Failed to update person:', error);
+      console.error("Failed to update person:", error);
       throw error;
     } finally {
       set((state) => ({
@@ -761,19 +831,21 @@ export const useStore = create<Store>((set, get) => ({
 
     try {
       await connectionAPI.deleteByPersonId(id);
-      
+
       const result = await personAPI.delete(id);
       if (result.success) {
         set((state) => ({
-          persons: state.persons.filter(p => p.id !== id),
-          connections: state.connections.filter(c => c.person_id !== id),
-          selectedPerson: state.selectedPerson?.id === id ? null : state.selectedPerson,
-          isPersonDetailOpen: state.selectedPerson?.id === id ? false : state.isPersonDetailOpen,
+          persons: state.persons.filter((p) => p.id !== id),
+          connections: state.connections.filter((c) => c.person_id !== id),
+          selectedPerson:
+            state.selectedPerson?.id === id ? null : state.selectedPerson,
+          isPersonDetailOpen:
+            state.selectedPerson?.id === id ? false : state.isPersonDetailOpen,
         }));
         get().applyPersonFilters();
       }
     } catch (error) {
-      console.error('Failed to delete person:', error);
+      console.error("Failed to delete person:", error);
       throw error;
     } finally {
       set((state) => ({
@@ -794,7 +866,7 @@ export const useStore = create<Store>((set, get) => ({
         await get().loadConnections();
       }
     } catch (error) {
-      console.error('Failed to create connection:', error);
+      console.error("Failed to create connection:", error);
       throw error;
     } finally {
       set((state) => ({
@@ -812,11 +884,11 @@ export const useStore = create<Store>((set, get) => ({
       const result = await connectionAPI.delete(id);
       if (result.success) {
         set((state) => ({
-          connections: state.connections.filter(c => c.id !== id),
+          connections: state.connections.filter((c) => c.id !== id),
         }));
       }
     } catch (error) {
-      console.error('Failed to delete connection:', error);
+      console.error("Failed to delete connection:", error);
       throw error;
     } finally {
       set((state) => ({
@@ -837,7 +909,7 @@ export const useStore = create<Store>((set, get) => ({
         await get().loadLinks();
       }
     } catch (error) {
-      console.error('Failed to create link:', error);
+      console.error("Failed to create link:", error);
       throw error;
     } finally {
       set((state) => ({
@@ -855,11 +927,11 @@ export const useStore = create<Store>((set, get) => ({
       const result = await linkAPI.update(link);
       if (result.success) {
         set((state) => ({
-          links: state.links.map(l => l.id === link.id ? link : l),
+          links: state.links.map((l) => (l.id === link.id ? link : l)),
         }));
       }
     } catch (error) {
-      console.error('Failed to update link:', error);
+      console.error("Failed to update link:", error);
       throw error;
     } finally {
       set((state) => ({
@@ -877,11 +949,11 @@ export const useStore = create<Store>((set, get) => ({
       const result = await linkAPI.delete(id);
       if (result.success) {
         set((state) => ({
-          links: state.links.filter(l => l.id !== id),
+          links: state.links.filter((l) => l.id !== id),
         }));
       }
     } catch (error) {
-      console.error('Failed to delete link:', error);
+      console.error("Failed to delete link:", error);
       throw error;
     } finally {
       set((state) => ({
@@ -893,33 +965,43 @@ export const useStore = create<Store>((set, get) => ({
   // Helper functions
   getPropertyPersons: (propertyId) => {
     const state = get();
-    const propertyConnections = state.connections.filter(c => c.property_id === propertyId);
-    return propertyConnections.map(connection => 
-      state.persons.find(person => person.id === connection.person_id)
-    ).filter(Boolean) as Person[];
+    const propertyConnections = state.connections.filter(
+      (c) => c.property_id === propertyId
+    );
+    return propertyConnections
+      .map((connection) =>
+        state.persons.find((person) => person.id === connection.person_id)
+      )
+      .filter(Boolean) as Person[];
   },
 
   getPropertyLinks: (propertyId) => {
     const state = get();
-    return state.links.filter(link => link.property_id === propertyId);
+    return state.links.filter((link) => link.property_id === propertyId);
   },
 
   getPersonProperties: (personId) => {
     const state = get();
-    const personConnections = state.connections.filter(c => c.person_id === personId);
-    return personConnections.map(connection => 
-      state.properties.find(property => property.id === connection.property_id)
-    ).filter(Boolean) as Property[];
+    const personConnections = state.connections.filter(
+      (c) => c.person_id === personId
+    );
+    return personConnections
+      .map((connection) =>
+        state.properties.find(
+          (property) => property.id === connection.property_id
+        )
+      )
+      .filter(Boolean) as Property[];
   },
 
   getPersonConnections: (personId) => {
     const state = get();
-    return state.connections.filter(c => c.person_id === personId);
+    return state.connections.filter((c) => c.person_id === personId);
   },
 
   getAllTags: () => {
     const state = get();
-    const allTags = state.properties.flatMap(property => property.tags || []);
+    const allTags = state.properties.flatMap((property) => property.tags || []);
     return Array.from(new Set(allTags)).sort();
   },
 
@@ -933,34 +1015,38 @@ export const useStore = create<Store>((set, get) => ({
     // Search query filter - Enhanced to search across multiple fields
     if (filters.searchQuery && filters.searchQuery.trim()) {
       const query = filters.searchQuery.toLowerCase().trim();
-      filtered = filtered.filter(property => {
+      filtered = filtered.filter((property) => {
         // Search in property fields
-        const propertyMatch = 
-          (property.area?.toLowerCase().includes(query)) ||
-          (property.zone?.toLowerCase().includes(query)) ||
-          (property.type?.toLowerCase().includes(query)) ||
-          (property.description?.toLowerCase().includes(query)) ||
-          (property.note?.toLowerCase().includes(query)) ||
-          (property.tags?.some(tag => tag.toLowerCase().includes(query)));
+        const propertyMatch =
+          property.area?.toLowerCase().includes(query) ||
+          property.zone?.toLowerCase().includes(query) ||
+          property.type?.toLowerCase().includes(query) ||
+          property.description?.toLowerCase().includes(query) ||
+          property.note?.toLowerCase().includes(query) ||
+          property.tags?.some((tag) => tag.toLowerCase().includes(query));
 
         // Search in connected persons
-        const propertyConnections = connections.filter(c => c.property_id === property.id);
-        const connectedPersons = propertyConnections.map(conn => 
-          persons.find(person => person.id === conn.person_id)
-        ).filter(Boolean);
-        
-        const personMatch = connectedPersons.some(person => 
-          person?.name?.toLowerCase().includes(query) ||
-          person?.phone?.includes(query) ||
-          person?.alternative_contact?.includes(query) ||
-          person?.role?.toLowerCase().includes(query) ||
-          person?.about?.toLowerCase().includes(query)
+        const propertyConnections = connections.filter(
+          (c) => c.property_id === property.id
+        );
+        const connectedPersons = propertyConnections
+          .map((conn) => persons.find((person) => person.id === conn.person_id))
+          .filter(Boolean);
+
+        const personMatch = connectedPersons.some(
+          (person) =>
+            person?.name?.toLowerCase().includes(query) ||
+            person?.phone?.includes(query) ||
+            person?.alternative_contact_details?.includes(query) ||
+            person?.role?.toLowerCase().includes(query) ||
+            person?.about?.toLowerCase().includes(query)
         );
 
         // Search in connection details
-        const connectionMatch = propertyConnections.some(conn =>
-          conn.role?.toLowerCase().includes(query) ||
-          conn.remark?.toLowerCase().includes(query)
+        const connectionMatch = propertyConnections.some(
+          (conn) =>
+            conn.role?.toLowerCase().includes(query) ||
+            conn.remark?.toLowerCase().includes(query)
         );
 
         return propertyMatch || personMatch || connectionMatch;
@@ -969,106 +1055,110 @@ export const useStore = create<Store>((set, get) => ({
 
     // Zone filter
     if (filters.zone && filters.zone.trim()) {
-      filtered = filtered.filter(property => 
-        property.zone === filters.zone
-      );
+      filtered = filtered.filter((property) => property.zone === filters.zone);
     }
 
     // Area filter
     if (filters.area && filters.area.trim()) {
       const areaQuery = filters.area.toLowerCase().trim();
-      filtered = filtered.filter(property => 
+      filtered = filtered.filter((property) =>
         property.area?.toLowerCase().includes(areaQuery)
       );
     }
 
     // Property type filter
     if (filters.propertyTypes.length > 0) {
-      filtered = filtered.filter(property => 
+      filtered = filtered.filter((property) =>
         filters.propertyTypes.includes(property.type!)
       );
     }
 
     // Price range filter - Multiple ranges support
     if (filters.priceRanges.length > 0) {
-      filtered = filtered.filter(property => {
+      filtered = filtered.filter((property) => {
         return filters.priceRanges.some(([min, max]) => {
           const propertyMin = property.price_min;
           const propertyMax = property.price_max;
-          
-          return (propertyMin <= max && propertyMax >= min);
+
+          return propertyMin <= max && propertyMax >= min;
         });
       });
     }
 
     // Size range filter - Multiple ranges support
     if (filters.sizeRanges.length > 0) {
-      filtered = filtered.filter(property => {
+      filtered = filtered.filter((property) => {
         return filters.sizeRanges.some(([min, max]) => {
           const propertyMin = property.size_min;
           const propertyMax = property.size_max;
-          
-          return (propertyMin <= max && propertyMax >= min);
+
+          return propertyMin <= max && propertyMax >= min;
         });
       });
     }
 
     // Rating filter
     if (filters.rating !== undefined) {
-      filtered = filtered.filter(property => 
-        property.rating >= filters.rating!
+      filtered = filtered.filter(
+        (property) => property.rating >= filters.rating!
       );
     }
 
     // Tags filter (include)
     if (filters.tags.length > 0) {
-      filtered = filtered.filter(property => 
-        filters.tags.some(tag => property.tags.includes(tag))
+      filtered = filtered.filter((property) =>
+        filters.tags.some((tag) => property.tags.includes(tag))
       );
     }
 
     // Excluded tags filter
     if (filters.excludedTags.length > 0) {
-      filtered = filtered.filter(property => 
-        !filters.excludedTags.some(tag => property.tags.includes(tag))
+      filtered = filtered.filter(
+        (property) =>
+          !filters.excludedTags.some((tag) => property.tags.includes(tag))
       );
     }
 
     // Location status filter
     if (filters.hasLocation !== null) {
-      filtered = filtered.filter(property => {
-        const hasValidLocation = 
+      filtered = filtered.filter((property) => {
+        const hasValidLocation =
           property.location.latitude !== DEFAULT_COORDINATES.latitude ||
           property.location.longitude !== DEFAULT_COORDINATES.longitude;
-        
+
         return filters.hasLocation ? hasValidLocation : !hasValidLocation;
       });
     }
 
     // Radius range filter
-    if (filters.radiusRange && (filters.radiusRange[0] > 0 || filters.radiusRange[1] < 50000)) {
-      filtered = filtered.filter(property => {
+    if (
+      filters.radiusRange &&
+      (filters.radiusRange[0] > 0 || filters.radiusRange[1] < 50000)
+    ) {
+      filtered = filtered.filter((property) => {
         const radius = property.radius || 0;
-        return radius >= filters.radiusRange[0] && radius <= filters.radiusRange[1];
+        return (
+          radius >= filters.radiusRange[0] && radius <= filters.radiusRange[1]
+        );
       });
     }
 
     // Sorting
     filtered.sort((a, b) => {
       switch (filters.sortBy) {
-        case 'price_asc':
+        case "price_asc":
           return a.price_min - b.price_min;
-        case 'price_desc':
+        case "price_desc":
           return b.price_min - a.price_min;
-        case 'size_asc':
+        case "size_asc":
           return a.size_min - b.size_min;
-        case 'size_desc':
+        case "size_desc":
           return b.size_min - a.size_min;
-        case 'rating_desc':
+        case "rating_desc":
           return (b.rating || 0) - (a.rating || 0);
-        case 'oldest':
+        case "oldest":
           return a.id - b.id;
-        case 'newest':
+        case "newest":
         default:
           return b.id - a.id;
       }
@@ -1086,26 +1176,29 @@ export const useStore = create<Store>((set, get) => ({
     // Search query filter
     if (personFilters.searchQuery && personFilters.searchQuery.trim()) {
       const query = personFilters.searchQuery.toLowerCase().trim();
-      filtered = filtered.filter(person => 
-        (person.name?.toLowerCase().includes(query)) ||
-        (person.phone?.includes(query)) ||
-        (person.alternative_contact?.includes(query)) ||
-        (person.role?.toLowerCase().includes(query)) ||
-        (person.about?.toLowerCase().includes(query))
+      filtered = filtered.filter(
+        (person) =>
+          person.name?.toLowerCase().includes(query) ||
+          person.phone?.includes(query) ||
+          person.alternative_contact_details?.includes(query) ||
+          person.role?.toLowerCase().includes(query) ||
+          person.about?.toLowerCase().includes(query)
       );
     }
 
     // Role filter
     if (personFilters.roles.length > 0) {
-      filtered = filtered.filter(person => 
+      filtered = filtered.filter((person) =>
         personFilters.roles.includes(person.role!)
       );
     }
 
     // Has properties filter
     if (personFilters.hasProperties !== null) {
-      filtered = filtered.filter(person => {
-        const hasProperties = connections.some(conn => conn.person_id === person.id);
+      filtered = filtered.filter((person) => {
+        const hasProperties = connections.some(
+          (conn) => conn.person_id === person.id
+        );
         return personFilters.hasProperties ? hasProperties : !hasProperties;
       });
     }

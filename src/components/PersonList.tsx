@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useStore } from '../store/store';
+import React, { useState, useEffect } from "react";
+import { useStore } from "../store/store";
 import {
   User,
   Phone,
@@ -11,9 +11,9 @@ import {
   Trash2,
   Loader2,
   ExternalLink,
-} from 'lucide-react';
-import ConfirmationModal from './ConfirmationModal';
-import { ITEMS_PER_PAGE } from '../constants';
+} from "lucide-react";
+import ConfirmationModal from "./ConfirmationModal";
+import { ITEMS_PER_PAGE } from "../constants";
 
 const PersonList: React.FC = () => {
   const {
@@ -39,7 +39,7 @@ const PersonList: React.FC = () => {
         // Only load persons - connections and properties will be loaded on-demand in detail view
         await loadPersons();
       } catch (error) {
-        console.error('Failed to load persons:', error);
+        console.error("Failed to load persons:", error);
       }
     };
 
@@ -56,9 +56,9 @@ const PersonList: React.FC = () => {
   };
 
   const openWhatsApp = (phone: string) => {
-    const cleanPhone = phone.replace(/\D/g, '');
+    const cleanPhone = phone.replace(/\D/g, "");
     const url = `https://wa.me/91${cleanPhone}`;
-    window.open(url, '_blank');
+    window.open(url, "_blank");
   };
 
   const makeCall = (phone: string) => {
@@ -75,7 +75,7 @@ const PersonList: React.FC = () => {
     try {
       await deletePerson(confirmDelete.id);
     } catch (error) {
-      console.error('Failed to delete person:', error);
+      console.error("Failed to delete person:", error);
     }
 
     setConfirmDelete(null);
@@ -170,19 +170,21 @@ const PersonList: React.FC = () => {
                       )}
 
                       {/* Alternative contact if available */}
-                      {person.alternative_contact && (
+                      {person.alternative_contact_details && (
                         <div className="flex items-center justify-between bg-gray-50 p-2 rounded border mt-1">
                           <div>
                             <span className="text-xs text-gray-500">Alt: </span>
                             <span className="text-sm font-mono">
-                              {person.alternative_contact}
+                              {person.alternative_contact_details}
                             </span>
                           </div>
                           <div className="flex items-center space-x-1">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                copyToClipboard(person.alternative_contact);
+                                copyToClipboard(
+                                  person.alternative_contact_details
+                                );
                               }}
                               className="p-1 text-gray-500 hover:text-gray-700"
                               title="Copy number"
@@ -192,7 +194,9 @@ const PersonList: React.FC = () => {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                openWhatsApp(person.alternative_contact);
+                                openWhatsApp(
+                                  person.alternative_contact_details
+                                );
                               }}
                               className="p-1 text-green-500 hover:text-green-700"
                               title="WhatsApp"
@@ -202,7 +206,7 @@ const PersonList: React.FC = () => {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                makeCall(person.alternative_contact);
+                                makeCall(person.alternative_contact_details);
                               }}
                               className="p-1 text-blue-500 hover:text-blue-700"
                               title="Call"
@@ -256,9 +260,13 @@ const PersonList: React.FC = () => {
                 <ChevronLeft size={16} />
               </button>
               <div className="text-sm text-gray-600 text-center">
-                <div>Page {currentPage} of {totalPages}</div>
+                <div>
+                  Page {currentPage} of {totalPages}
+                </div>
                 <div className="text-xs text-gray-500">
-                  Showing {startIndex + 1}-{Math.min(endIndex, filteredPersons.length)} of {filteredPersons.length}
+                  Showing {startIndex + 1}-
+                  {Math.min(endIndex, filteredPersons.length)} of{" "}
+                  {filteredPersons.length}
                 </div>
               </div>
               <button

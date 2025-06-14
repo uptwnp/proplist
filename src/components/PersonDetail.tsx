@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useStore } from '../store/store';
+import React, { useState, useEffect } from "react";
+import { useStore } from "../store/store";
 import {
   X,
   MapPin,
@@ -22,10 +22,10 @@ import {
   Link as LinkIcon,
   Share2,
   Loader2,
-} from 'lucide-react';
-import { formatCurrency } from '../utils/formatters';
-import ConfirmationModal from './ConfirmationModal';
-import { DEFAULT_COORDINATES } from '../constants';
+} from "lucide-react";
+import { formatCurrency } from "../utils/formatters";
+import ConfirmationModal from "./ConfirmationModal";
+import { DEFAULT_COORDINATES } from "../constants";
 
 const PersonDetail: React.FC = () => {
   const {
@@ -50,7 +50,7 @@ const PersonDetail: React.FC = () => {
   } = useStore();
 
   const [confirmDelete, setConfirmDelete] = useState<{
-    type: 'connection' | 'person';
+    type: "connection" | "person";
     id: number;
     name: string;
   } | null>(null);
@@ -64,12 +64,12 @@ const PersonDetail: React.FC = () => {
         try {
           await loadPersonDetails(selectedPerson.id);
         } catch (error) {
-          console.error('Failed to load person details:', error);
+          console.error("Failed to load person details:", error);
         } finally {
           setIsLoadingDetails(false);
         }
       };
-      
+
       loadDetails();
     }
   }, [selectedPerson?.id, isPersonDetailOpen, loadPersonDetails]);
@@ -92,9 +92,9 @@ const PersonDetail: React.FC = () => {
   };
 
   const openWhatsApp = (phone: string) => {
-    const cleanPhone = phone.replace(/\D/g, '');
+    const cleanPhone = phone.replace(/\D/g, "");
     const url = `https://wa.me/91${cleanPhone}`;
-    window.open(url, '_blank');
+    window.open(url, "_blank");
   };
 
   const makeCall = (phone: string) => {
@@ -107,9 +107,13 @@ const PersonDetail: React.FC = () => {
 ---
 *Name:* ${selectedPerson.name}
 *Phone:* ${selectedPerson.phone}
-${selectedPerson.alternative_contact ? `*Alt Contact:* ${selectedPerson.alternative_contact}` : ''}
-*Role:* ${selectedPerson.role || 'Not specified'}
-${selectedPerson.about ? `*About:* ${selectedPerson.about}` : ''}
+${
+  selectedPerson.alternative_contact_details
+    ? `*Alt Contact:* ${selectedPerson.alternative_contact_details}`
+    : ""
+}
+*Role:* ${selectedPerson.role || "Not specified"}
+${selectedPerson.about ? `*About:* ${selectedPerson.about}` : ""}
 
 *Connected Properties:* ${personProperties.length}
 ---
@@ -118,7 +122,7 @@ Contact for more details.`;
 
     const encodedMessage = encodeURIComponent(message);
     const whatsappUrl = `https://wa.me/?text=${encodedMessage}`;
-    window.open(whatsappUrl, '_blank');
+    window.open(whatsappUrl, "_blank");
   };
 
   const handleRemovePropertyFromPerson = (
@@ -126,7 +130,7 @@ Contact for more details.`;
     propertyName: string
   ) => {
     setConfirmDelete({
-      type: 'connection',
+      type: "connection",
       id: propertyId,
       name: propertyName,
     });
@@ -134,7 +138,7 @@ Contact for more details.`;
 
   const handleDeletePerson = () => {
     setConfirmDelete({
-      type: 'person',
+      type: "person",
       id: selectedPerson.id,
       name: selectedPerson.name,
     });
@@ -144,7 +148,7 @@ Contact for more details.`;
     if (!confirmDelete) return;
 
     try {
-      if (confirmDelete.type === 'connection') {
+      if (confirmDelete.type === "connection") {
         // Find the connection to delete
         const connectionToDelete = connections.find(
           (conn) =>
@@ -154,12 +158,12 @@ Contact for more details.`;
         if (connectionToDelete) {
           await deleteConnection(connectionToDelete.id);
         }
-      } else if (confirmDelete.type === 'person') {
+      } else if (confirmDelete.type === "person") {
         await deletePerson(confirmDelete.id);
         togglePersonDetail(false);
       }
     } catch (error) {
-      console.error('Failed to delete:', error);
+      console.error("Failed to delete:", error);
     }
 
     setConfirmDelete(null);
@@ -171,7 +175,7 @@ Contact for more details.`;
     if (isMobileView) {
       togglePersonDetail(false);
     }
-    
+
     setSelectedProperty(property);
     setMapViewport({
       latitude: property.location.latitude,
@@ -205,8 +209,8 @@ Contact for more details.`;
       <div
         className={`bg-white shadow-xl z-30 flex flex-col ${
           isMobileView
-            ? 'fixed inset-x-0 bottom-0 rounded-t-2xl max-h-[90vh]'
-            : 'fixed top-14 right-0 bottom-0 w-1/3 border-l'
+            ? "fixed inset-x-0 bottom-0 rounded-t-2xl max-h-[90vh]"
+            : "fixed top-14 right-0 bottom-0 w-1/3 border-l"
         }`}
       >
         {/* Header with gradient background - Fixed */}
@@ -218,7 +222,7 @@ Contact for more details.`;
                 {selectedPerson.name}
               </h2>
               <p className="text-green-100 text-sm truncate">
-                {selectedPerson.role || 'Contact Person'}
+                {selectedPerson.role || "Contact Person"}
               </p>
             </div>
             <button
@@ -270,7 +274,7 @@ Contact for more details.`;
                 <Phone size={14} className="mr-2 text-green-600" />
                 Contact Information
               </h4>
-              
+
               {/* Primary Phone */}
               {selectedPerson.phone && (
                 <div className="flex items-center justify-between bg-white p-3 rounded-lg border mb-3">
@@ -304,20 +308,22 @@ Contact for more details.`;
               )}
 
               {/* Alternative Contact */}
-              {selectedPerson.alternative_contact && (
+              {selectedPerson.alternative_contact_details && (
                 <div className="flex items-center justify-between bg-white p-3 rounded-lg border">
                   <div>
                     <span className="text-xs text-gray-500 uppercase tracking-wide">
-                      Alternative:{' '}
+                      Alternative:{" "}
                     </span>
                     <span className="text-sm font-mono text-gray-900">
-                      {selectedPerson.alternative_contact}
+                      {selectedPerson.alternative_contact_details}
                     </span>
                   </div>
                   <div className="flex items-center space-x-1">
                     <button
                       onClick={() =>
-                        copyToClipboard(selectedPerson.alternative_contact!)
+                        copyToClipboard(
+                          selectedPerson.alternative_contact_details!
+                        )
                       }
                       className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
                       title="Copy number"
@@ -326,7 +332,9 @@ Contact for more details.`;
                     </button>
                     <button
                       onClick={() =>
-                        openWhatsApp(selectedPerson.alternative_contact!)
+                        openWhatsApp(
+                          selectedPerson.alternative_contact_details!
+                        )
                       }
                       className="p-2 text-green-500 hover:text-green-700 hover:bg-green-50 rounded-md transition-colors"
                       title="WhatsApp"
@@ -335,7 +343,7 @@ Contact for more details.`;
                     </button>
                     <button
                       onClick={() =>
-                        makeCall(selectedPerson.alternative_contact!)
+                        makeCall(selectedPerson.alternative_contact_details!)
                       }
                       className="p-2 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
                       title="Call"
@@ -387,13 +395,17 @@ Contact for more details.`;
                           <div className="flex-1">
                             <div className="flex items-center space-x-2 mb-1">
                               <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                                {property.type || 'Property'}
+                                {property.type || "Property"}
                               </span>
-                              {property.rating > 0 && renderRating(property.rating)}
-                              <ExternalLink size={14} className="text-blue-500" />
+                              {property.rating > 0 &&
+                                renderRating(property.rating)}
+                              <ExternalLink
+                                size={14}
+                                className="text-blue-500"
+                              />
                             </div>
                             <h3 className="font-medium text-gray-900 mb-1">
-                              {property.area || 'Property Area'}
+                              {property.area || "Property Area"}
                             </h3>
                             {property.zone && (
                               <div className="text-sm text-gray-600 mb-2">
@@ -456,7 +468,7 @@ Contact for more details.`;
                               e.stopPropagation();
                               handleRemovePropertyFromPerson(
                                 property.id,
-                                property.area || 'this property'
+                                property.area || "this property"
                               );
                             }}
                             className="text-red-500 hover:text-red-700 p-1 rounded-md hover:bg-red-50 transition-colors"
@@ -473,7 +485,9 @@ Contact for more details.`;
                 <div className="text-center py-8 text-gray-500">
                   <Building size={48} className="mx-auto mb-3 text-gray-300" />
                   <p>No connected properties</p>
-                  <p className="text-sm">Properties will appear here when connected</p>
+                  <p className="text-sm">
+                    Properties will appear here when connected
+                  </p>
                 </div>
               )}
             </div>
@@ -498,8 +512,12 @@ Contact for more details.`;
                     Total Value
                   </div>
                   <div className="text-lg font-semibold text-green-900">
-                    ₹{formatCurrency(
-                      personProperties.reduce((sum, prop) => sum + prop.price_min, 0)
+                    ₹
+                    {formatCurrency(
+                      personProperties.reduce(
+                        (sum, prop) => sum + prop.price_min,
+                        0
+                      )
                     )}
                   </div>
                 </div>
@@ -524,19 +542,19 @@ Contact for more details.`;
       <ConfirmationModal
         isOpen={!!confirmDelete}
         title={
-          confirmDelete?.type === 'connection'
-            ? 'Remove Property Connection'
-            : 'Delete Person'
+          confirmDelete?.type === "connection"
+            ? "Remove Property Connection"
+            : "Delete Person"
         }
         message={
-          confirmDelete?.type === 'connection'
+          confirmDelete?.type === "connection"
             ? `Are you sure you want to remove the connection to "${confirmDelete.name}"? This action cannot be undone.`
             : `Are you sure you want to delete "${confirmDelete?.name}"? This will permanently remove the person and all their property connections. This action cannot be undone.`
         }
         confirmText={
-          confirmDelete?.type === 'connection'
-            ? 'Remove Connection'
-            : 'Delete Person'
+          confirmDelete?.type === "connection"
+            ? "Remove Connection"
+            : "Delete Person"
         }
         onConfirm={confirmDeleteAction}
         onCancel={() => setConfirmDelete(null)}
