@@ -1,14 +1,14 @@
-import React, { useEffect } from 'react';
-import { Search, X, SlidersHorizontal } from 'lucide-react';
-import { useStore } from '../store/store';
-import PropertyList from './PropertyList';
-import PersonList from './PersonList';
+import React, { useEffect } from "react";
+import { Search, X, SlidersHorizontal } from "lucide-react";
+import { useStore } from "../store/store";
+import PropertyList from "./PropertyList";
+import PersonList from "./PersonList";
 
 const Sidebar: React.FC = () => {
-  const { 
-    isSidebarOpen, 
-    toggleSidebar, 
-    filters, 
+  const {
+    isSidebarOpen,
+    toggleSidebar,
+    filters,
     updateFilters,
     personFilters,
     updatePersonFilters,
@@ -16,20 +16,20 @@ const Sidebar: React.FC = () => {
     toggleFilterDrawer,
     activeTab,
     loadProperties,
-    loadPersons
+    loadPersons,
   } = useStore();
 
   // Load data when sidebar opens or tab changes - with proper deduplication
   useEffect(() => {
     if (isSidebarOpen) {
-      if (activeTab === 'properties') {
-        console.log('Sidebar: Loading properties for properties tab');
+      if (activeTab === "properties") {
+        console.log("Sidebar: Loading properties for properties tab");
         loadProperties(); // This now has built-in deduplication
-      } else if (activeTab === 'persons') {
-        console.log('Sidebar: Loading persons for persons tab');
+      } else if (activeTab === "persons") {
+        console.log("Sidebar: Loading persons for persons tab");
         // Only load persons data - connections and links will be loaded on-demand
-        loadPersons().catch(error => {
-          console.error('Failed to load persons:', error);
+        loadPersons().catch((error) => {
+          console.error("Failed to load persons:", error);
         });
       }
     }
@@ -38,80 +38,85 @@ const Sidebar: React.FC = () => {
   // Calculate active filter count for properties
   const getPropertyFilterCount = () => {
     let count = 0;
-    
+
     // Search query
     if (filters.searchQuery && filters.searchQuery.trim()) count++;
-    
+
     // Zone filter - NEW: Count zone filter
     if (filters.zone && filters.zone.trim()) count++;
-    
+
     // Area filter - NEW: Count area filter
     if (filters.area && filters.area.trim()) count++;
-    
+
     // Price ranges (if any selected)
     if (filters.priceRanges && filters.priceRanges.length > 0) count++;
-    
+
     // Size ranges (if any selected)
     if (filters.sizeRanges && filters.sizeRanges.length > 0) count++;
-    
+
     // Property types
     if (filters.propertyTypes && filters.propertyTypes.length > 0) count++;
-    
+
     // Rating
     if (filters.rating !== undefined) count++;
-    
+
     // Include tags
     if (filters.tags && filters.tags.length > 0) count++;
-    
+
     // Exclude tags
     if (filters.excludedTags && filters.excludedTags.length > 0) count++;
-    
+
     // Sort by (if not default)
-    if (filters.sortBy && filters.sortBy !== 'newest') count++;
-    
+    if (filters.sortBy && filters.sortBy !== "newest") count++;
+
     // Location status
     if (filters.hasLocation !== null) count++;
-    
+
     // Radius ranges (if not default range)
-    if (filters.radiusRange && (filters.radiusRange[0] > 0 || filters.radiusRange[1] < 50000)) count++;
-    
+    if (
+      filters.radiusRange &&
+      (filters.radiusRange[0] > 0 || filters.radiusRange[1] < 50000)
+    )
+      count++;
+
     return count;
   };
 
   // Calculate active filter count for persons
   const getPersonFilterCount = () => {
     let count = 0;
-    
+
     // Search query
     if (personFilters.searchQuery && personFilters.searchQuery.trim()) count++;
-    
+
     // Roles
     if (personFilters.roles && personFilters.roles.length > 0) count++;
-    
+
     // Has properties
     if (personFilters.hasProperties !== null) count++;
-    
+
     return count;
   };
 
-  const activeFilterCount = activeTab === 'properties' 
-    ? getPropertyFilterCount() 
-    : getPersonFilterCount();
+  const activeFilterCount =
+    activeTab === "properties"
+      ? getPropertyFilterCount()
+      : getPersonFilterCount();
 
   if (!isSidebarOpen) return null;
 
   return (
-    <aside className={`bg-white shadow-lg fixed z-10 transition-all duration-300 ${
-      isMobileView 
-        ? 'inset-0 top-14 overflow-y-auto' 
-        : 'left-0 top-14 bottom-0 w-96 overflow-y-auto'
-    }`}>
-      <div className="p-4 border-b">
-        <div className="flex items-center justify-between mb-4">
-         
-        </div>
-        
-        {activeTab === 'properties' && (
+    <aside
+      className={`bg-white shadow-lg fixed z-10 transition-all duration-300 ${
+        isMobileView
+          ? "inset-0 top-14 overflow-y-auto"
+          : "left-0 top-14 bottom-0 w-96 overflow-y-auto"
+      }`}
+    >
+      <div className="px-4 border-b">
+        <div className="flex items-center justify-between mb-4"></div>
+
+        {activeTab === "properties" && (
           <>
             <div className="flex items-center space-x-2 mb-3">
               <div className="relative flex-1">
@@ -119,18 +124,23 @@ const Sidebar: React.FC = () => {
                   type="text"
                   placeholder="Search properties, persons, connections..."
                   className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={filters.searchQuery || ''}
-                  onChange={(e) => updateFilters({ searchQuery: e.target.value })}
+                  value={filters.searchQuery || ""}
+                  onChange={(e) =>
+                    updateFilters({ searchQuery: e.target.value })
+                  }
                 />
-                <Search size={18} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <Search
+                  size={18}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                />
               </div>
-              
+
               <button
                 onClick={toggleFilterDrawer}
                 className={`flex items-center justify-center space-x-1 px-3 py-2 rounded-md transition-colors relative flex-shrink-0 ${
-                  activeFilterCount > 0 
-                    ? 'bg-blue-100 hover:bg-blue-200 text-blue-700 border border-blue-300' 
-                    : 'bg-gray-100 hover:bg-gray-200'
+                  activeFilterCount > 0
+                    ? "bg-blue-100 hover:bg-blue-200 text-blue-700 border border-blue-300"
+                    : "bg-gray-100 hover:bg-gray-200"
                 }`}
               >
                 <SlidersHorizontal size={16} />
@@ -144,7 +154,7 @@ const Sidebar: React.FC = () => {
           </>
         )}
 
-        {activeTab === 'persons' && (
+        {activeTab === "persons" && (
           <>
             <div className="flex items-center space-x-2 mb-3">
               <div className="relative flex-1">
@@ -152,18 +162,23 @@ const Sidebar: React.FC = () => {
                   type="text"
                   placeholder="Search persons by name, phone, role..."
                   className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={personFilters.searchQuery || ''}
-                  onChange={(e) => updatePersonFilters({ searchQuery: e.target.value })}
+                  value={personFilters.searchQuery || ""}
+                  onChange={(e) =>
+                    updatePersonFilters({ searchQuery: e.target.value })
+                  }
                 />
-                <Search size={18} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <Search
+                  size={18}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                />
               </div>
-              
+
               <button
                 onClick={toggleFilterDrawer}
                 className={`flex items-center justify-center space-x-1 px-3 py-2 rounded-md transition-colors relative flex-shrink-0 ${
-                  activeFilterCount > 0 
-                    ? 'bg-blue-100 hover:bg-blue-200 text-blue-700 border border-blue-300' 
-                    : 'bg-gray-100 hover:bg-gray-200'
+                  activeFilterCount > 0
+                    ? "bg-blue-100 hover:bg-blue-200 text-blue-700 border border-blue-300"
+                    : "bg-gray-100 hover:bg-gray-200"
                 }`}
               >
                 <SlidersHorizontal size={16} />
@@ -177,8 +192,8 @@ const Sidebar: React.FC = () => {
           </>
         )}
       </div>
-      
-      {activeTab === 'properties' ? <PropertyList /> : <PersonList />}
+
+      {activeTab === "properties" ? <PropertyList /> : <PersonList />}
     </aside>
   );
 };
