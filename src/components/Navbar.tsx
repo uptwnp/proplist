@@ -1,6 +1,6 @@
-import React from 'react';
-import { Menu, Plus, Home, Users, X, Building2 } from 'lucide-react';
-import { useStore } from '../store/store';
+import React from "react";
+import { Menu, Plus, Home, Users, X, Building2 } from "lucide-react";
+import { useStore } from "../store/store";
 
 const Navbar: React.FC = () => {
   const {
@@ -21,7 +21,7 @@ const Navbar: React.FC = () => {
             <button
               onClick={toggleSidebar}
               className="p-2 rounded-md hover:bg-gray-100 transition-colors"
-              aria-label={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+              aria-label={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
             >
               {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
@@ -29,33 +29,33 @@ const Navbar: React.FC = () => {
 
           <div className="flex bg-gray-100 rounded-lg p-1">
             <button
-              onClick={() => setActiveTab('properties')}
+              onClick={() => setActiveTab("properties")}
               className={`flex items-center px-3 py-1.5 rounded-md transition-colors ${
-                activeTab === 'properties'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:bg-gray-200'
+                activeTab === "properties"
+                  ? "bg-white text-blue-600 shadow-sm"
+                  : "text-gray-600 hover:bg-gray-200"
               }`}
             >
               <Home size={18} />
-              <span className="ml-2">Properties</span>
+              <span className="ml-2"></span>
             </button>
             <button
-              onClick={() => setActiveTab('persons')}
+              onClick={() => setActiveTab("persons")}
               className={`flex items-center px-3 py-1.5 rounded-md transition-colors ${
-                activeTab === 'persons'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:bg-gray-200'
+                activeTab === "persons"
+                  ? "bg-white text-blue-600 shadow-sm"
+                  : "text-gray-600 hover:bg-gray-200"
               }`}
             >
               <Users size={18} />
-              <span className="ml-2">Persons</span>
+              <span className="ml-2"></span>
             </button>
           </div>
         </div>
 
         <button
           onClick={() =>
-            activeTab === 'properties'
+            activeTab === "properties"
               ? togglePropertyForm()
               : togglePersonForm()
           }
@@ -63,7 +63,7 @@ const Navbar: React.FC = () => {
         >
           <Plus size={18} />
           <span className="hidden sm:inline">
-            Add {activeTab === 'properties' ? 'Property' : 'Person'}
+            Add {activeTab === "properties" ? "Property" : "Person"}
           </span>
         </button>
       </div>
