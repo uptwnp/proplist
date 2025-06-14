@@ -124,6 +124,7 @@ export const PROPERTY_ZONES = [
   "Toll Side",
 
   "Nangal Kheri",
+  "GT Road",
   "Outer Sanoli Road",
   "Outer Delhi Road",
   "Outer Karnal Road",
