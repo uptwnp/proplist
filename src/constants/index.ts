@@ -111,6 +111,7 @@ export const PROPERTY_ZONES = [
   "Sat Kartar",
   "Sondhapur",
   "Sodhapur",
+  "Gohana Road",
   "Kabri Road",
   "Sector 24",
   "Babail Road",
