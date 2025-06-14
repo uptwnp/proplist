@@ -107,7 +107,7 @@ export const RATING_OPTIONS = [1, 2, 3, 4, 5] as const;
 
 // Property Zones
 export const PROPERTY_ZONES = [
-  "Modal Town",
+  "Model Town",
   "Sat Kartar",
   "Sondhapur",
   "Sodhapur",
