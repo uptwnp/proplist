@@ -16,7 +16,7 @@ import {
   linkAPI,
   extractAllDataFromProperties,
 } from "../utils/api";
-import { DEFAULT_COORDINATES, PRICE_RANGES, SIZE_RANGES } from "../constants";
+import { DEFAULT_COORDINATES, PRICE_RANGES, SIZE_RANGES, APP_VERSION } from "../constants";
 
 // Helper function to ensure valid location
 const ensureValidLocation = (location: any) => {
@@ -30,6 +30,74 @@ const ensureValidLocation = (location: any) => {
     return DEFAULT_COORDINATES;
   }
   return location;
+};
+
+// Local Storage Keys
+const STORAGE_KEYS = {
+  PROPERTIES: 'pms_properties',
+  PERSONS: 'pms_persons',
+  CONNECTIONS: 'pms_connections',
+  LINKS: 'pms_links',
+  LAST_SYNC: 'pms_last_sync',
+  VERSION: 'pms_version'
+};
+
+// Local Storage Helper Functions
+const storage = {
+  set: (key: string, data: any) => {
+    try {
+      localStorage.setItem(key, JSON.stringify({
+        data,
+        timestamp: Date.now(),
+        version: APP_VERSION
+      }));
+    } catch (error) {
+      console.warn('Failed to save to localStorage:', error);
+    }
+  },
+
+  get: (key: string) => {
+    try {
+      const stored = localStorage.getItem(key);
+      if (!stored) return null;
+      
+      const parsed = JSON.parse(stored);
+      
+      // Check version compatibility
+      if (parsed.version !== APP_VERSION) {
+        console.log(`Version mismatch for ${key}, clearing cache`);
+        localStorage.removeItem(key);
+        return null;
+      }
+      
+      // Check if data is too old (24 hours)
+      const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+      if (Date.now() - parsed.timestamp > maxAge) {
+        console.log(`Cache expired for ${key}, clearing`);
+        localStorage.removeItem(key);
+        return null;
+      }
+      
+      return parsed.data;
+    } catch (error) {
+      console.warn('Failed to read from localStorage:', error);
+      return null;
+    }
+  },
+
+  clear: () => {
+    Object.values(STORAGE_KEYS).forEach(key => {
+      localStorage.removeItem(key);
+    });
+  },
+
+  setLastSync: () => {
+    storage.set(STORAGE_KEYS.LAST_SYNC, Date.now());
+  },
+
+  getLastSync: (): number => {
+    return storage.get(STORAGE_KEYS.LAST_SYNC) || 0;
+  }
 };
 
 interface LoadingStates {
@@ -80,6 +148,10 @@ interface Store {
   isLoading: boolean;
   error: string | null;
 
+  // Cache state
+  isLoadingFromCache: boolean;
+  lastSyncTime: number;
+
   // Data loading flags to prevent duplicate requests
   dataLoadingPromises: {
     properties: Promise<void> | null;
@@ -117,6 +189,7 @@ interface Store {
   resetPersonFilters: () => void;
 
   // Data Actions
+  loadFromCache: () => void;
   loadProperties: () => Promise<void>;
   loadPersons: () => Promise<void>;
   loadConnections: () => Promise<void>;
@@ -124,6 +197,7 @@ interface Store {
   loadAllData: () => Promise<void>;
   loadPropertyDetails: (id: number) => Promise<void>;
   loadPersonDetails: (id: number) => Promise<void>;
+  refreshData: () => Promise<void>;
 
   createProperty: (property: Omit<Property, "id">) => Promise<void>;
   updateProperty: (property: Property) => Promise<void>;
@@ -207,13 +281,15 @@ export const useStore = create<Store>((set, get) => ({
   editingProperty: null,
   editingPerson: null,
   activeTab: "properties",
-  isLiveView: false, // Changed from true to false - Live View off by default
+  isLiveView: false,
   mapViewport: initialMapViewport,
   filters: initialFilters,
   personFilters: initialPersonFilters,
   loadingStates: initialLoadingStates,
   isLoading: false,
   error: null,
+  isLoadingFromCache: false,
+  lastSyncTime: 0,
   dataLoadingPromises: {
     properties: null,
     persons: null,
@@ -222,25 +298,84 @@ export const useStore = create<Store>((set, get) => ({
     allData: null,
   },
 
-  // Setters
-  setProperties: (properties) => {
-    set({ properties });
-    const state = get();
-    if (!state.loadingStates.properties) {
+  // Load data from cache immediately
+  loadFromCache: () => {
+    console.log('Loading data from cache...');
+    set({ isLoadingFromCache: true });
+    
+    const cachedProperties = storage.get(STORAGE_KEYS.PROPERTIES);
+    const cachedPersons = storage.get(STORAGE_KEYS.PERSONS);
+    const cachedConnections = storage.get(STORAGE_KEYS.CONNECTIONS);
+    const cachedLinks = storage.get(STORAGE_KEYS.LINKS);
+    const lastSync = storage.getLastSync();
+
+    if (cachedProperties || cachedPersons || cachedConnections || cachedLinks) {
+      console.log('Found cached data:', {
+        properties: cachedProperties?.length || 0,
+        persons: cachedPersons?.length || 0,
+        connections: cachedConnections?.length || 0,
+        links: cachedLinks?.length || 0,
+        lastSync: new Date(lastSync).toLocaleString()
+      });
+
+      // Validate cached properties
+      const validatedProperties = (cachedProperties || []).map((property: Property) => ({
+        ...property,
+        location: ensureValidLocation(property.location),
+      }));
+
+      set({
+        properties: validatedProperties,
+        persons: cachedPersons || [],
+        connections: cachedConnections || [],
+        links: cachedLinks || [],
+        lastSyncTime: lastSync,
+        isLoadingFromCache: false,
+      });
+
+      // Apply filters to cached data
       get().applyFilters();
+      get().applyPersonFilters();
+    } else {
+      console.log('No cached data found');
+      set({ isLoadingFromCache: false });
     }
+  },
+
+  // Setters with cache updates and improved filtering
+  setProperties: (properties) => {
+    console.log('Setting properties:', properties.length);
+    set({ properties });
+    storage.set(STORAGE_KEYS.PROPERTIES, properties);
+    
+    // Apply filters immediately after setting properties
+    setTimeout(() => {
+      get().applyFilters();
+    }, 0);
   },
 
   setPersons: (persons) => {
+    console.log('Setting persons:', persons.length);
     set({ persons });
-    const state = get();
-    if (!state.loadingStates.persons) {
+    storage.set(STORAGE_KEYS.PERSONS, persons);
+    
+    // Apply person filters immediately after setting persons
+    setTimeout(() => {
+      console.log('Applying person filters after setting persons...');
       get().applyPersonFilters();
-    }
+    }, 0);
   },
 
-  setConnections: (connections) => set({ connections }),
-  setLinks: (links) => set({ links }),
+  setConnections: (connections) => {
+    set({ connections });
+    storage.set(STORAGE_KEYS.CONNECTIONS, connections);
+  },
+
+  setLinks: (links) => {
+    set({ links });
+    storage.set(STORAGE_KEYS.LINKS, links);
+  },
+
   setFilteredProperties: (filteredProperties) => set({ filteredProperties }),
 
   setSelectedProperty: (property) => set({ selectedProperty: property }),
@@ -328,6 +463,7 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   updatePersonFilters: (newFilters) => {
+    console.log('Updating person filters:', newFilters);
     set((state) => ({
       personFilters: { ...state.personFilters, ...newFilters },
     }));
@@ -335,11 +471,37 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   resetPersonFilters: () => {
+    console.log('Resetting person filters');
     set({ personFilters: initialPersonFilters });
     get().applyPersonFilters();
   },
 
-  // Data loading actions with deduplication
+  // Refresh data from API
+  refreshData: async () => {
+    console.log('Refreshing data from API...');
+    
+    // Clear existing promises to force fresh requests
+    set({
+      dataLoadingPromises: {
+        properties: null,
+        persons: null,
+        connections: null,
+        links: null,
+        allData: null,
+      }
+    });
+
+    try {
+      await get().loadAllData();
+      storage.setLastSync();
+      set({ lastSyncTime: Date.now() });
+      console.log('Data refresh completed');
+    } catch (error) {
+      console.error('Failed to refresh data:', error);
+    }
+  },
+
+  // Data loading actions with deduplication and caching
   loadProperties: async () => {
     const state = get();
 
@@ -371,8 +533,7 @@ export const useStore = create<Store>((set, get) => ({
           location: ensureValidLocation(property.location),
         }));
 
-        set({ properties: validatedProperties });
-        get().applyFilters();
+        get().setProperties(validatedProperties);
       } catch (error) {
         console.error("Failed to load properties:", error);
         set({ error: "Failed to load properties" });
@@ -416,19 +577,21 @@ export const useStore = create<Store>((set, get) => ({
     const loadPromise = (async () => {
       set((state) => ({
         loadingStates: { ...state.loadingStates, persons: true },
+        isLoading: true,
+        error: null,
       }));
 
       try {
         const persons = await personAPI.getAll();
-        console.log("Loaded persons:", persons.length);
-        set({ persons });
-        get().applyPersonFilters();
+        console.log("Loaded persons from API:", persons.length);
+        get().setPersons(persons);
       } catch (error) {
         console.error("Failed to load persons:", error);
         set({ error: "Failed to load persons" });
       } finally {
         set((state) => ({
           loadingStates: { ...state.loadingStates, persons: false },
+          isLoading: false,
           dataLoadingPromises: { ...state.dataLoadingPromises, persons: null },
         }));
       }
@@ -467,7 +630,7 @@ export const useStore = create<Store>((set, get) => ({
       try {
         const connections = await connectionAPI.getAll();
         console.log("Loaded connections:", connections.length);
-        set({ connections });
+        get().setConnections(connections);
       } catch (error) {
         console.error("Failed to load connections:", error);
         set({ error: "Failed to load connections" });
@@ -515,7 +678,7 @@ export const useStore = create<Store>((set, get) => ({
       try {
         const links = await linkAPI.getAll();
         console.log("Loaded links:", links.length);
-        set({ links });
+        get().setLinks(links);
       } catch (error) {
         console.error("Failed to load links:", error);
         set({ error: "Failed to load links" });
@@ -563,15 +726,11 @@ export const useStore = create<Store>((set, get) => ({
           location: ensureValidLocation(property.location),
         }));
 
-        set({
-          properties: validatedProperties,
-          persons,
-          connections,
-          links,
-        });
-
-        get().applyFilters();
-        get().applyPersonFilters();
+        // Update all data at once
+        get().setProperties(validatedProperties);
+        get().setPersons(persons);
+        get().setConnections(connections);
+        get().setLinks(links);
 
         console.log("All data loaded successfully");
       } catch (error) {
@@ -616,19 +775,30 @@ export const useStore = create<Store>((set, get) => ({
         const existingPersonIds = new Set(state.persons.map((p) => p.id));
         const newPersons = persons.filter((p) => !existingPersonIds.has(p.id));
 
+        const updatedPersons = [...state.persons, ...newPersons];
+        const updatedConnections = [
+          ...state.connections.filter((c) => c.property_id !== id),
+          ...connections,
+        ];
+        const updatedLinks = [...state.links.filter((l) => l.property_id !== id), ...links];
+
+        // Update cache
+        storage.set(STORAGE_KEYS.PROPERTIES, updatedProperties);
+        storage.set(STORAGE_KEYS.PERSONS, updatedPersons);
+        storage.set(STORAGE_KEYS.CONNECTIONS, updatedConnections);
+        storage.set(STORAGE_KEYS.LINKS, updatedLinks);
+
         return {
           properties: updatedProperties,
-          persons: [...state.persons, ...newPersons],
-          connections: [
-            ...state.connections.filter((c) => c.property_id !== id),
-            ...connections,
-          ],
-          links: [...state.links.filter((l) => l.property_id !== id), ...links],
+          persons: updatedPersons,
+          connections: updatedConnections,
+          links: updatedLinks,
           selectedProperty: validatedProperty,
         };
       });
 
       get().applyFilters();
+      get().applyPersonFilters();
     } catch (error) {
       console.error("Failed to load property details:", error);
       throw error;
@@ -656,19 +826,29 @@ export const useStore = create<Store>((set, get) => ({
             location: ensureValidLocation(property.location),
           }));
 
+        const updatedProperties = [...state.properties, ...newProperties];
+        const updatedConnections = [
+          ...state.connections.filter((c) => c.person_id !== id),
+          ...connections,
+        ];
+        const updatedLinks = [
+          ...state.links,
+          ...links.filter(
+            (l) => !state.links.some((existing) => existing.id === l.id)
+          ),
+        ];
+
+        // Update cache
+        storage.set(STORAGE_KEYS.PERSONS, updatedPersons);
+        storage.set(STORAGE_KEYS.PROPERTIES, updatedProperties);
+        storage.set(STORAGE_KEYS.CONNECTIONS, updatedConnections);
+        storage.set(STORAGE_KEYS.LINKS, updatedLinks);
+
         return {
           persons: updatedPersons,
-          properties: [...state.properties, ...newProperties],
-          connections: [
-            ...state.connections.filter((c) => c.person_id !== id),
-            ...connections,
-          ],
-          links: [
-            ...state.links,
-            ...links.filter(
-              (l) => !state.links.some((existing) => existing.id === l.id)
-            ),
-          ],
+          properties: updatedProperties,
+          connections: updatedConnections,
+          links: updatedLinks,
           selectedPerson: person,
         };
       });
@@ -681,7 +861,7 @@ export const useStore = create<Store>((set, get) => ({
     }
   },
 
-  // Property CRUD
+  // Property CRUD with immediate state updates
   createProperty: async (propertyData) => {
     set((state) => ({
       loadingStates: { ...state.loadingStates, creating: true },
@@ -690,7 +870,23 @@ export const useStore = create<Store>((set, get) => ({
     try {
       const result = await propertyAPI.create(propertyData);
       if (result.success) {
-        await get().loadProperties();
+        // Optimistically add the new property to the state
+        const newProperty = {
+          ...propertyData,
+          id: result.id,
+          location: ensureValidLocation(propertyData.location),
+        } as Property;
+
+        set((state) => {
+          const updatedProperties = [...state.properties, newProperty];
+          storage.set(STORAGE_KEYS.PROPERTIES, updatedProperties);
+          return { properties: updatedProperties };
+        });
+
+        get().applyFilters();
+        
+        // Refresh data in background to ensure consistency
+        setTimeout(() => get().refreshData(), 1000);
       }
     } catch (error) {
       console.error("Failed to create property:", error);
@@ -714,6 +910,9 @@ export const useStore = create<Store>((set, get) => ({
           const updatedProperties = state.properties.map((p) =>
             p.id === property.id ? property : p
           );
+          
+          storage.set(STORAGE_KEYS.PROPERTIES, updatedProperties);
+          
           return {
             properties: updatedProperties,
             selectedProperty:
@@ -752,6 +951,11 @@ export const useStore = create<Store>((set, get) => ({
           );
           const updatedLinks = state.links.filter((l) => l.property_id !== id);
 
+          // Update cache
+          storage.set(STORAGE_KEYS.PROPERTIES, updatedProperties);
+          storage.set(STORAGE_KEYS.CONNECTIONS, updatedConnections);
+          storage.set(STORAGE_KEYS.LINKS, updatedLinks);
+
           return {
             properties: updatedProperties,
             connections: updatedConnections,
@@ -776,7 +980,7 @@ export const useStore = create<Store>((set, get) => ({
     }
   },
 
-  // Person CRUD
+  // Person CRUD with immediate state updates
   createPerson: async (personData) => {
     set((state) => ({
       loadingStates: { ...state.loadingStates, creating: true },
@@ -785,7 +989,22 @@ export const useStore = create<Store>((set, get) => ({
     try {
       const result = await personAPI.create(personData);
       if (result.success) {
-        await get().loadPersons();
+        // Optimistically add the new person to the state
+        const newPerson = {
+          ...personData,
+          id: result.id,
+        } as Person;
+
+        set((state) => {
+          const updatedPersons = [...state.persons, newPerson];
+          storage.set(STORAGE_KEYS.PERSONS, updatedPersons);
+          return { persons: updatedPersons };
+        });
+
+        get().applyPersonFilters();
+        
+        // Refresh data in background to ensure consistency
+        setTimeout(() => get().refreshData(), 1000);
       }
     } catch (error) {
       console.error("Failed to create person:", error);
@@ -805,13 +1024,18 @@ export const useStore = create<Store>((set, get) => ({
     try {
       const result = await personAPI.update(person);
       if (result.success) {
-        set((state) => ({
-          persons: state.persons.map((p) => (p.id === person.id ? person : p)),
-          selectedPerson:
-            state.selectedPerson?.id === person.id
-              ? person
-              : state.selectedPerson,
-        }));
+        set((state) => {
+          const updatedPersons = state.persons.map((p) => (p.id === person.id ? person : p));
+          storage.set(STORAGE_KEYS.PERSONS, updatedPersons);
+          
+          return {
+            persons: updatedPersons,
+            selectedPerson:
+              state.selectedPerson?.id === person.id
+                ? person
+                : state.selectedPerson,
+          };
+        });
         get().applyPersonFilters();
       }
     } catch (error) {
@@ -834,14 +1058,22 @@ export const useStore = create<Store>((set, get) => ({
 
       const result = await personAPI.delete(id);
       if (result.success) {
-        set((state) => ({
-          persons: state.persons.filter((p) => p.id !== id),
-          connections: state.connections.filter((c) => c.person_id !== id),
-          selectedPerson:
-            state.selectedPerson?.id === id ? null : state.selectedPerson,
-          isPersonDetailOpen:
-            state.selectedPerson?.id === id ? false : state.isPersonDetailOpen,
-        }));
+        set((state) => {
+          const updatedPersons = state.persons.filter((p) => p.id !== id);
+          const updatedConnections = state.connections.filter((c) => c.person_id !== id);
+          
+          storage.set(STORAGE_KEYS.PERSONS, updatedPersons);
+          storage.set(STORAGE_KEYS.CONNECTIONS, updatedConnections);
+          
+          return {
+            persons: updatedPersons,
+            connections: updatedConnections,
+            selectedPerson:
+              state.selectedPerson?.id === id ? null : state.selectedPerson,
+            isPersonDetailOpen:
+              state.selectedPerson?.id === id ? false : state.isPersonDetailOpen,
+          };
+        });
         get().applyPersonFilters();
       }
     } catch (error) {
@@ -854,7 +1086,7 @@ export const useStore = create<Store>((set, get) => ({
     }
   },
 
-  // Connection CRUD
+  // Connection CRUD with immediate state updates
   createConnection: async (connectionData) => {
     set((state) => ({
       loadingStates: { ...state.loadingStates, creating: true },
@@ -863,7 +1095,20 @@ export const useStore = create<Store>((set, get) => ({
     try {
       const result = await connectionAPI.create(connectionData);
       if (result.success) {
-        await get().loadConnections();
+        // Optimistically add the new connection to the state
+        const newConnection = {
+          ...connectionData,
+          id: result.id,
+        } as Connection;
+
+        set((state) => {
+          const updatedConnections = [...state.connections, newConnection];
+          storage.set(STORAGE_KEYS.CONNECTIONS, updatedConnections);
+          return { connections: updatedConnections };
+        });
+        
+        // Refresh data in background to ensure consistency
+        setTimeout(() => get().refreshData(), 1000);
       }
     } catch (error) {
       console.error("Failed to create connection:", error);
@@ -883,9 +1128,11 @@ export const useStore = create<Store>((set, get) => ({
     try {
       const result = await connectionAPI.delete(id);
       if (result.success) {
-        set((state) => ({
-          connections: state.connections.filter((c) => c.id !== id),
-        }));
+        set((state) => {
+          const updatedConnections = state.connections.filter((c) => c.id !== id);
+          storage.set(STORAGE_KEYS.CONNECTIONS, updatedConnections);
+          return { connections: updatedConnections };
+        });
       }
     } catch (error) {
       console.error("Failed to delete connection:", error);
@@ -897,7 +1144,7 @@ export const useStore = create<Store>((set, get) => ({
     }
   },
 
-  // Link CRUD
+  // Link CRUD with immediate state updates
   createLink: async (linkData) => {
     set((state) => ({
       loadingStates: { ...state.loadingStates, creating: true },
@@ -906,7 +1153,20 @@ export const useStore = create<Store>((set, get) => ({
     try {
       const result = await linkAPI.create(linkData);
       if (result.success) {
-        await get().loadLinks();
+        // Optimistically add the new link to the state
+        const newLink = {
+          ...linkData,
+          id: result.id,
+        } as Link;
+
+        set((state) => {
+          const updatedLinks = [...state.links, newLink];
+          storage.set(STORAGE_KEYS.LINKS, updatedLinks);
+          return { links: updatedLinks };
+        });
+        
+        // Refresh data in background to ensure consistency
+        setTimeout(() => get().refreshData(), 1000);
       }
     } catch (error) {
       console.error("Failed to create link:", error);
@@ -926,9 +1186,11 @@ export const useStore = create<Store>((set, get) => ({
     try {
       const result = await linkAPI.update(link);
       if (result.success) {
-        set((state) => ({
-          links: state.links.map((l) => (l.id === link.id ? link : l)),
-        }));
+        set((state) => {
+          const updatedLinks = state.links.map((l) => (l.id === link.id ? link : l));
+          storage.set(STORAGE_KEYS.LINKS, updatedLinks);
+          return { links: updatedLinks };
+        });
       }
     } catch (error) {
       console.error("Failed to update link:", error);
@@ -948,9 +1210,11 @@ export const useStore = create<Store>((set, get) => ({
     try {
       const result = await linkAPI.delete(id);
       if (result.success) {
-        set((state) => ({
-          links: state.links.filter((l) => l.id !== id),
-        }));
+        set((state) => {
+          const updatedLinks = state.links.filter((l) => l.id !== id);
+          storage.set(STORAGE_KEYS.LINKS, updatedLinks);
+          return { links: updatedLinks };
+        });
       }
     } catch (error) {
       console.error("Failed to delete link:", error);
@@ -1171,11 +1435,19 @@ export const useStore = create<Store>((set, get) => ({
     const state = get();
     const { persons, personFilters, connections } = state;
 
+    console.log('Applying person filters:', {
+      totalPersons: persons.length,
+      filters: personFilters,
+      connections: connections.length
+    });
+
     let filtered = [...persons];
 
     // Search query filter
     if (personFilters.searchQuery && personFilters.searchQuery.trim()) {
       const query = personFilters.searchQuery.toLowerCase().trim();
+      console.log('Applying search filter:', query);
+      
       filtered = filtered.filter(
         (person) =>
           person.name?.toLowerCase().includes(query) ||
@@ -1184,25 +1456,36 @@ export const useStore = create<Store>((set, get) => ({
           person.role?.toLowerCase().includes(query) ||
           person.about?.toLowerCase().includes(query)
       );
+      
+      console.log('After search filter:', filtered.length);
     }
 
     // Role filter
     if (personFilters.roles.length > 0) {
+      console.log('Applying role filter:', personFilters.roles);
+      
       filtered = filtered.filter((person) =>
         personFilters.roles.includes(person.role!)
       );
+      
+      console.log('After role filter:', filtered.length);
     }
 
     // Has properties filter
     if (personFilters.hasProperties !== null) {
+      console.log('Applying hasProperties filter:', personFilters.hasProperties);
+      
       filtered = filtered.filter((person) => {
         const hasProperties = connections.some(
           (conn) => conn.person_id === person.id
         );
         return personFilters.hasProperties ? hasProperties : !hasProperties;
       });
+      
+      console.log('After hasProperties filter:', filtered.length);
     }
 
+    console.log('Final filtered persons:', filtered.length);
     set({ filteredPersons: filtered });
   },
 }));

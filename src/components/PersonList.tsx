@@ -11,6 +11,8 @@ import {
   Trash2,
   Loader2,
   ExternalLink,
+  AlertCircle,
+  RefreshCw,
 } from "lucide-react";
 import ConfirmationModal from "./ConfirmationModal";
 import { ITEMS_PER_PAGE } from "../constants";
@@ -24,6 +26,11 @@ const PersonList: React.FC = () => {
     deletePerson,
     loadingStates,
     loadPersons,
+    refreshData,
+    isLoading,
+    persons,
+    error,
+    applyPersonFilters
   } = useStore();
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -32,19 +39,24 @@ const PersonList: React.FC = () => {
     name: string;
   } | null>(null);
 
-  // Load persons when component mounts
+  // Load persons when component mounts - but only if we don't have data
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        // Only load persons - connections and properties will be loaded on-demand in detail view
-        await loadPersons();
-      } catch (error) {
-        console.error("Failed to load persons:", error);
-      }
-    };
+    console.log('PersonList mounted, checking data:', {
+      personsCount: persons.length,
+      filteredPersonsCount: filteredPersons.length
+    });
 
-    loadData();
-  }, [loadPersons]);
+    if (persons.length === 0) {
+      console.log("PersonList: No persons data, loading...");
+      loadPersons().catch((error) => {
+        console.error("Failed to load persons:", error);
+      });
+    } else if (filteredPersons.length === 0 && persons.length > 0) {
+      // If we have persons but no filtered persons, apply filters
+      console.log("PersonList: Have persons but no filtered persons, applying filters...");
+      applyPersonFilters();
+    }
+  }, [loadPersons, persons.length, filteredPersons.length, applyPersonFilters]);
 
   const totalPages = Math.ceil(filteredPersons.length / ITEMS_PER_PAGE);
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -86,8 +98,12 @@ const PersonList: React.FC = () => {
     togglePersonDetail(true);
   };
 
-  // Show loading state
-  if (loadingStates.persons) {
+  const handleRetry = () => {
+    refreshData();
+  };
+
+  // Show loading state only when initially loading and no data
+  if (isLoading && persons.length === 0) {
     return (
       <div className="flex flex-col h-full">
         <div className="flex-1 flex items-center justify-center">
@@ -100,15 +116,70 @@ const PersonList: React.FC = () => {
     );
   }
 
+  // Show error state only if we have an error and no cached data
+  if (error && persons.length === 0) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center p-6">
+            <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+            <p className="text-red-600 mb-4">Failed to load persons</p>
+            <button
+              onClick={handleRetry}
+              disabled={isLoading}
+              className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 mx-auto"
+            >
+              <RefreshCw size={16} className={isLoading ? "animate-spin" : ""} />
+              <span>Retry</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="flex flex-col h-full">
+        {/* Background loading indicator */}
+        {isLoading && persons.length > 0 && (
+          <div className="px-4 py-2 bg-blue-50 border-b border-blue-200 text-blue-700 text-sm flex items-center space-x-2">
+            <Loader2 size={14} className="animate-spin" />
+            <span>Updating persons...</span>
+          </div>
+        )}
+
+        {/* Debug info for development */}
+        {process.env.NODE_ENV === "development" && (
+          <div className="px-4 py-1 bg-yellow-50 border-b border-yellow-200 text-yellow-700 text-xs">
+            Debug: {persons.length} total, {filteredPersons.length} filtered
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto divide-y">
           {filteredPersons.length === 0 ? (
             <div className="p-6 text-center">
-              <p className="text-gray-500">
-                No persons found matching your criteria.
-              </p>
+              {persons.length === 0 ? (
+                <>
+                  <User size={48} className="mx-auto mb-3 text-gray-300" />
+                  <p className="text-gray-500">No persons available</p>
+                  <p className="text-sm text-gray-400">Add a new person to get started</p>
+                </>
+              ) : (
+                <>
+                  <User size={48} className="mx-auto mb-3 text-gray-300" />
+                  <p className="text-gray-500">
+                    No persons found matching your criteria.
+                  </p>
+                  <p className="text-sm text-gray-400">Try adjusting your search or filters</p>
+                  <button
+                    onClick={() => applyPersonFilters()}
+                    className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 text-sm"
+                  >
+                    Refresh Filters
+                  </button>
+                </>
+              )}
             </div>
           ) : (
             currentPersons.map((person) => {

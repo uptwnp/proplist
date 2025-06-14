@@ -22,10 +22,14 @@ function App() {
     togglePersonForm,
     editingProperty,
     editingPerson,
-    loadProperties,
+    loadFromCache,
+    loadAllData,
+    refreshData,
     isLoading,
+    isLoadingFromCache,
     error,
-    activeTab
+    activeTab,
+    lastSyncTime
   } = useStore();
 
   // Use ref to prevent duplicate initial loads
@@ -86,23 +90,48 @@ function App() {
     };
   }, [setMobileView]);
   
-  // Initialize app with only properties (lazy load everything else)
-  // This is the ONLY place where we call loadProperties on app init
+  // Initialize app with cache-first approach
   useEffect(() => {
     if (!hasInitialized.current) {
       hasInitialized.current = true;
-      console.log('App initializing - loading only properties initially');
-      loadProperties(); // This now has built-in deduplication
+      console.log('App initializing with cache-first approach...');
+      
+      // Load from cache immediately
+      loadFromCache();
+      
+      // Then load fresh data from API
+      loadAllData().catch(error => {
+        console.error('Failed to load fresh data:', error);
+      });
     }
-  }, []); // Removed loadProperties from dependencies to prevent re-runs
+  }, [loadFromCache, loadAllData]);
 
-  // Show loading state only for initial properties load
-  if (isLoading && !hasInitialized.current) {
+  // Auto-refresh data every 5 minutes if the app is active
+  useEffect(() => {
+    const refreshInterval = setInterval(() => {
+      if (!document.hidden && lastSyncTime) {
+        const timeSinceLastSync = Date.now() - lastSyncTime;
+        const fiveMinutes = 5 * 60 * 1000;
+        
+        if (timeSinceLastSync > fiveMinutes) {
+          console.log('Auto-refreshing data...');
+          refreshData();
+        }
+      }
+    }, 60000); // Check every minute
+
+    return () => clearInterval(refreshInterval);
+  }, [lastSyncTime, refreshData]);
+
+  // Show loading state only for initial load when no cache is available
+  if ((isLoading || isLoadingFromCache) && !hasInitialized.current) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading properties...</p>
+          <p className="text-gray-600">
+            {isLoadingFromCache ? 'Loading from cache...' : 'Loading data...'}
+          </p>
           <p className="text-xs text-gray-500 mt-2">Version {APP_VERSION}</p>
         </div>
       </div>
@@ -110,7 +139,7 @@ function App() {
   }
 
   // Show error state
-  if (error) {
+  if (error && !hasInitialized.current) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -123,7 +152,8 @@ function App() {
           <button 
             onClick={() => {
               hasInitialized.current = false;
-              loadProperties();
+              loadFromCache();
+              loadAllData();
             }}
             className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
           >
@@ -138,6 +168,14 @@ function App() {
   return (
     <div className="h-screen w-screen overflow-hidden bg-gray-50">
       <Navbar />
+      
+      {/* Loading indicator for background refresh */}
+      {isLoading && hasInitialized.current && (
+        <div className="fixed top-16 right-4 z-50 bg-blue-500 text-white px-3 py-1 rounded-full text-sm flex items-center space-x-2">
+          <div className="animate-spin rounded-full h-3 w-3 border border-white border-t-transparent"></div>
+          <span>Syncing...</span>
+        </div>
+      )}
       
       <div className="flex h-full pt-14">
         <Sidebar />
@@ -170,9 +208,14 @@ function App() {
         )}
       </div>
       
-      {/* Version indicator in bottom right corner */}
-      <div className="fixed bottom-2 right-2 text-xs text-gray-400 bg-white/80 px-2 py-1 rounded">
-        v{APP_VERSION}
+      {/* Version indicator with sync status */}
+      <div className="fixed bottom-2 right-2 text-xs text-gray-400 bg-white/80 px-2 py-1 rounded flex items-center space-x-2">
+        <span>v{APP_VERSION}</span>
+        {lastSyncTime && (
+          <span className="text-green-500">
+            • {new Date(lastSyncTime).toLocaleTimeString()}
+          </span>
+        )}
       </div>
     </div>
   );

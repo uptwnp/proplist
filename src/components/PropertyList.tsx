@@ -13,6 +13,8 @@ import {
   Navigation,
   Plus,
   Loader2,
+  AlertCircle,
+  RefreshCw,
 } from 'lucide-react';
 import { formatCurrency } from '../utils/formatters';
 import ConfirmationModal from './ConfirmationModal';
@@ -32,6 +34,9 @@ const PropertyList: React.FC = () => {
     connections,
     setConnections,
     loadingStates,
+    isLoading,
+    error,
+    refreshData,
   } = useStore();
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -108,14 +113,26 @@ const PropertyList: React.FC = () => {
     );
   };
 
-  // Show loading state
-  if (loadingStates.properties) {
+  const handleRetry = () => {
+    refreshData();
+  };
+
+  // Show error state only if we have an error and no cached data
+  if (error && properties.length === 0) {
     return (
       <div className="flex flex-col h-full">
         <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-4" />
-            <p className="text-gray-600">Loading properties...</p>
+          <div className="text-center p-6">
+            <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+            <p className="text-red-600 mb-4">Failed to load properties</p>
+            <button
+              onClick={handleRetry}
+              disabled={isLoading}
+              className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 mx-auto"
+            >
+              <RefreshCw size={16} className={isLoading ? "animate-spin" : ""} />
+              <span>Retry</span>
+            </button>
           </div>
         </div>
       </div>
@@ -125,12 +142,32 @@ const PropertyList: React.FC = () => {
   return (
     <>
       <div className="flex flex-col h-full">
+        {/* Background loading indicator */}
+        {isLoading && properties.length > 0 && (
+          <div className="px-4 py-2 bg-blue-50 border-b border-blue-200 text-blue-700 text-sm flex items-center space-x-2">
+            <Loader2 size={14} className="animate-spin" />
+            <span>Updating properties...</span>
+          </div>
+        )}
+
         <div className="flex-1 divide-y overflow-y-auto">
           {filteredProperties.length === 0 ? (
             <div className="p-6 text-center">
-              <p className="text-gray-500">
-                No properties found matching your criteria.
-              </p>
+              {properties.length === 0 ? (
+                <>
+                  <Building size={48} className="mx-auto mb-3 text-gray-300" />
+                  <p className="text-gray-500">No properties available</p>
+                  <p className="text-sm text-gray-400">Add a new property to get started</p>
+                </>
+              ) : (
+                <>
+                  <Building size={48} className="mx-auto mb-3 text-gray-300" />
+                  <p className="text-gray-500">
+                    No properties found matching your criteria.
+                  </p>
+                  <p className="text-sm text-gray-400">Try adjusting your search or filters</p>
+                </>
+              )}
             </div>
           ) : (
             currentProperties.map((property) => (
