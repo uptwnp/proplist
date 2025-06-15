@@ -272,13 +272,6 @@ const Sidebar: React.FC = () => {
               </button>
             </div>
 
-            {/* Data status indicator */}
-            <div className="mb-3 text-xs text-gray-500 flex items-center justify-between">
-              <span>{persons.length} persons loaded</span>
-              {lastSyncTime && (
-                <span>Updated {formatLastSync(lastSyncTime)}</span>
-              )}
-            </div>
           </>
         )}
       </div>
