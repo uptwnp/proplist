@@ -22,7 +22,7 @@ const Sidebar: React.FC = () => {
     lastSyncTime,
     properties,
     persons,
-    applyPersonFilters
+    applyPersonFilters,
   } = useStore();
 
   // Load data when sidebar opens or tab changes - with proper deduplication
@@ -34,18 +34,26 @@ const Sidebar: React.FC = () => {
       } else if (activeTab === "persons") {
         console.log("Sidebar: Loading persons for persons tab");
         // Load persons data and ensure filters are applied
-        loadPersons().then(() => {
-          console.log("Sidebar: Persons loaded, applying filters...");
-          // Small delay to ensure state is updated
-          setTimeout(() => {
-            applyPersonFilters();
-          }, 100);
-        }).catch((error) => {
-          console.error("Failed to load persons:", error);
-        });
+        loadPersons()
+          .then(() => {
+            console.log("Sidebar: Persons loaded, applying filters...");
+            // Small delay to ensure state is updated
+            setTimeout(() => {
+              applyPersonFilters();
+            }, 100);
+          })
+          .catch((error) => {
+            console.error("Failed to load persons:", error);
+          });
       }
     }
-  }, [isSidebarOpen, activeTab, loadProperties, loadPersons, applyPersonFilters]);
+  }, [
+    isSidebarOpen,
+    activeTab,
+    loadProperties,
+    loadPersons,
+    applyPersonFilters,
+  ]);
 
   // Calculate active filter count for properties
   const getPropertyFilterCount = () => {
@@ -122,18 +130,18 @@ const Sidebar: React.FC = () => {
 
   // Format last sync time
   const formatLastSync = (timestamp: number) => {
-    if (!timestamp) return '';
-    
+    if (!timestamp) return "";
+
     const now = Date.now();
     const diff = now - timestamp;
     const minutes = Math.floor(diff / 60000);
-    
-    if (minutes < 1) return 'Just now';
+
+    if (minutes < 1) return "Just now";
     if (minutes < 60) return `${minutes}m ago`;
-    
+
     const hours = Math.floor(minutes / 60);
     if (hours < 24) return `${hours}h ago`;
-    
+
     return new Date(timestamp).toLocaleDateString();
   };
 
@@ -189,23 +197,26 @@ const Sidebar: React.FC = () => {
                 onClick={handleRefresh}
                 disabled={isLoading}
                 className={`flex items-center justify-center px-3 py-2 rounded-md transition-colors flex-shrink-0 ${
-                  isLoading 
-                    ? "bg-gray-100 text-gray-400 cursor-not-allowed" 
+                  isLoading
+                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                     : "bg-gray-100 hover:bg-gray-200 text-gray-600"
                 }`}
                 title="Refresh data"
               >
-                <RefreshCw size={16} className={isLoading ? "animate-spin" : ""} />
+                <RefreshCw
+                  size={16}
+                  className={isLoading ? "animate-spin" : ""}
+                />
               </button>
             </div>
 
             {/* Data status indicator */}
-            <div className="mb-3 text-xs text-gray-500 flex items-center justify-between">
-              <span>{properties.length} properties loaded</span>
-              {lastSyncTime && (
+
+            {lastSyncTime > 0 && (
+              <div className="mb-3 text-xs text-gray-500 flex items-center justify-between">
                 <span>Updated {formatLastSync(lastSyncTime)}</span>
-              )}
-            </div>
+              </div>
+            )}
           </>
         )}
 
@@ -248,13 +259,16 @@ const Sidebar: React.FC = () => {
                 onClick={handleRefresh}
                 disabled={isLoading}
                 className={`flex items-center justify-center px-3 py-2 rounded-md transition-colors flex-shrink-0 ${
-                  isLoading 
-                    ? "bg-gray-100 text-gray-400 cursor-not-allowed" 
+                  isLoading
+                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                     : "bg-gray-100 hover:bg-gray-200 text-gray-600"
                 }`}
                 title="Refresh data"
               >
-                <RefreshCw size={16} className={isLoading ? "animate-spin" : ""} />
+                <RefreshCw
+                  size={16}
+                  className={isLoading ? "animate-spin" : ""}
+                />
               </button>
             </div>
 
