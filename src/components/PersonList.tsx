@@ -30,7 +30,7 @@ const PersonList: React.FC = () => {
     isLoading,
     persons,
     error,
-    applyPersonFilters
+    applyPersonFilters,
   } = useStore();
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -41,9 +41,9 @@ const PersonList: React.FC = () => {
 
   // Load persons when component mounts - but only if we don't have data
   useEffect(() => {
-    console.log('PersonList mounted, checking data:', {
+    console.log("PersonList mounted, checking data:", {
       personsCount: persons.length,
-      filteredPersonsCount: filteredPersons.length
+      filteredPersonsCount: filteredPersons.length,
     });
 
     if (persons.length === 0) {
@@ -53,7 +53,9 @@ const PersonList: React.FC = () => {
       });
     } else if (filteredPersons.length === 0 && persons.length > 0) {
       // If we have persons but no filtered persons, apply filters
-      console.log("PersonList: Have persons but no filtered persons, applying filters...");
+      console.log(
+        "PersonList: Have persons but no filtered persons, applying filters..."
+      );
       applyPersonFilters();
     }
   }, [loadPersons, persons.length, filteredPersons.length, applyPersonFilters]);
@@ -129,7 +131,10 @@ const PersonList: React.FC = () => {
               disabled={isLoading}
               className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 mx-auto"
             >
-              <RefreshCw size={16} className={isLoading ? "animate-spin" : ""} />
+              <RefreshCw
+                size={16}
+                className={isLoading ? "animate-spin" : ""}
+              />
               <span>Retry</span>
             </button>
           </div>
@@ -149,13 +154,6 @@ const PersonList: React.FC = () => {
           </div>
         )}
 
-        {/* Debug info for development */}
-        {process.env.NODE_ENV === "development" && (
-          <div className="px-4 py-1 bg-yellow-50 border-b border-yellow-200 text-yellow-700 text-xs">
-            Debug: {persons.length} total, {filteredPersons.length} filtered
-          </div>
-        )}
-
         <div className="flex-1 overflow-y-auto divide-y">
           {filteredPersons.length === 0 ? (
             <div className="p-6 text-center">
@@ -163,7 +161,9 @@ const PersonList: React.FC = () => {
                 <>
                   <User size={48} className="mx-auto mb-3 text-gray-300" />
                   <p className="text-gray-500">No persons available</p>
-                  <p className="text-sm text-gray-400">Add a new person to get started</p>
+                  <p className="text-sm text-gray-400">
+                    Add a new person to get started
+                  </p>
                 </>
               ) : (
                 <>
@@ -171,7 +171,9 @@ const PersonList: React.FC = () => {
                   <p className="text-gray-500">
                     No persons found matching your criteria.
                   </p>
-                  <p className="text-sm text-gray-400">Try adjusting your search or filters</p>
+                  <p className="text-sm text-gray-400">
+                    Try adjusting your search or filters
+                  </p>
                   <button
                     onClick={() => applyPersonFilters()}
                     className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 text-sm"

@@ -182,14 +182,6 @@ function App() {
     <div className="h-screen w-screen overflow-hidden bg-gray-50">
       <Navbar />
 
-      {/* Loading indicator for background refresh */}
-      {isLoading && hasInitialized.current && (
-        <div className="fixed top-16 right-4 z-50 bg-blue-500 text-white px-3 py-1 rounded-full text-sm flex items-center space-x-2">
-          <div className="animate-spin rounded-full h-3 w-3 border border-white border-t-transparent"></div>
-          <span>Syncing...</span>
-        </div>
-      )}
-
       <div className="flex h-full pt-14">
         <Sidebar />
 
