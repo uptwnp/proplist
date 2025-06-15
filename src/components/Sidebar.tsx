@@ -209,8 +209,6 @@ const Sidebar: React.FC = () => {
                 />
               </button>
             </div>
-
-           
           </>
         )}
 
@@ -265,7 +263,6 @@ const Sidebar: React.FC = () => {
                 />
               </button>
             </div>
-
           </>
         )}
       </div>
