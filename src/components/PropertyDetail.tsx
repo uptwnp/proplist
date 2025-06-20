@@ -22,6 +22,9 @@ import {
   Link as LinkIcon,
   Share2,
   Loader2,
+  Check,
+  Calendar,
+  Clock,
 } from "lucide-react";
 import { formatCurrency } from "../utils/formatters";
 import SelectPersonModal from "./SelectPersonModal";
@@ -65,6 +68,15 @@ const PropertyDetail: React.FC = () => {
     name: string;
   } | null>(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  const [copiedStates, setCopiedStates] = useState<{
+    details: boolean;
+    location: boolean;
+    detailsWithLocation: boolean;
+  }>({
+    details: false,
+    location: false,
+    detailsWithLocation: false,
+  });
 
   // Load detailed property data when property is selected
   useEffect(() => {
@@ -119,9 +131,18 @@ const PropertyDetail: React.FC = () => {
     window.open(url, "_blank");
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    // You could add a toast notification here
+  const copyToClipboard = async (text: string, type: 'details' | 'location' | 'detailsWithLocation') => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedStates(prev => ({ ...prev, [type]: true }));
+      
+      // Reset the copied state after 2 seconds
+      setTimeout(() => {
+        setCopiedStates(prev => ({ ...prev, [type]: false }));
+      }, 2000);
+    } catch (error) {
+      console.error('Failed to copy to clipboard:', error);
+    }
   };
 
   const openWhatsApp = (phone: string) => {
@@ -134,8 +155,8 @@ const PropertyDetail: React.FC = () => {
     window.location.href = `tel:${phone}`;
   };
 
-  // Share property details on WhatsApp
-  const sharePropertyDetails = () => {
+  // Generate property details text
+  const generatePropertyDetailsText = (includeLocation = false) => {
     const sizeText =
       selectedProperty.size_min === selectedProperty.size_max
         ? `${Math.round(selectedProperty.size_min)} sq.yd`
@@ -150,7 +171,7 @@ const PropertyDetail: React.FC = () => {
             selectedProperty.price_max
           )}`;
 
-    const message = `*Property Details*
+    let message = `*Property Details*
 ---
 ${selectedProperty.id}. ${selectedProperty.type || "Property"} in ${
       selectedProperty.area || "Unknown Area"
@@ -159,21 +180,37 @@ ${selectedProperty.id}. ${selectedProperty.type || "Property"} in ${
 *Size:* ${sizeText}
 *Demand:* ₹${priceText}
 *Zone:* ${selectedProperty.zone || "Not specified"}
-*Description:* ${selectedProperty.description || "No description available"}
+*Description:* ${selectedProperty.description || "No description available"}`;
+
+    if (includeLocation && hasValidLocation()) {
+      const { latitude, longitude } = selectedProperty.location;
+      const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`;
+      
+      const radiusText =
+        selectedProperty.radius && selectedProperty.radius > 0
+          ? selectedProperty.radius >= 1000
+            ? `${(selectedProperty.radius / 1000).toFixed(1)} km`
+            : `${selectedProperty.radius} meters`
+          : "20 meters";
+
+      message += `
+
+*Location:* ${googleMapsUrl}
+*Accuracy:* ${radiusText}`;
+    }
+
+    message += `
 ---
 
 Contact for more details.`;
 
-    const encodedMessage = encodeURIComponent(message);
-    const whatsappUrl = `https://wa.me/?text=${encodedMessage}`;
-    window.open(whatsappUrl, "_blank");
+    return message;
   };
 
-  // Share location on WhatsApp
-  const shareLocation = () => {
+  // Generate location text
+  const generateLocationText = () => {
     if (!hasValidLocation()) {
-      alert("Location not available for this property");
-      return;
+      return "Location not available for this property";
     }
 
     const { latitude, longitude } = selectedProperty.location;
@@ -193,7 +230,7 @@ Contact for more details.`;
           : `${selectedProperty.radius} meters`
         : "20 meters";
 
-    const message = `*Property Location*
+    return `*Property Location*
 ---
 ${selectedProperty.id}. ${selectedProperty.type || "Property"} in ${
       selectedProperty.area || "Unknown Area"
@@ -204,7 +241,32 @@ ${selectedProperty.id}. ${selectedProperty.type || "Property"} in ${
 
 Location is accurate up to *${radiusText}*
 ---`;
+  };
 
+  // Share property details on WhatsApp
+  const sharePropertyDetails = () => {
+    const message = generatePropertyDetailsText();
+    const encodedMessage = encodeURIComponent(message);
+    const whatsappUrl = `https://wa.me/?text=${encodedMessage}`;
+    window.open(whatsappUrl, "_blank");
+  };
+
+  // Share property details with location on WhatsApp
+  const sharePropertyDetailsWithLocation = () => {
+    const message = generatePropertyDetailsText(true);
+    const encodedMessage = encodeURIComponent(message);
+    const whatsappUrl = `https://wa.me/?text=${encodedMessage}`;
+    window.open(whatsappUrl, "_blank");
+  };
+
+  // Share location on WhatsApp
+  const shareLocation = () => {
+    if (!hasValidLocation()) {
+      alert("Location not available for this property");
+      return;
+    }
+
+    const message = generateLocationText();
     const encodedMessage = encodeURIComponent(message);
     const whatsappUrl = `https://wa.me/?text=${encodedMessage}`;
     window.open(whatsappUrl, "_blank");
@@ -330,6 +392,24 @@ Location is accurate up to *${radiusText}*
 
     setSelectedPerson(person);
     togglePersonDetail(true);
+  };
+
+  // Format date for display
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return "Not available";
+    
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-IN', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      return "Invalid date";
+    }
   };
 
   return (
@@ -464,7 +544,8 @@ Location is accurate up to *${radiusText}*
                 )}
               </div>
             </div>
-
+          
+          
             {/* Description Card */}
             {selectedProperty.description && (
               <div className="bg-white border rounded-xl p-4">
@@ -511,7 +592,27 @@ Location is accurate up to *${radiusText}*
                 </div>
               )}
             </div>
-
+  <div className="flex flex-col gap-2">
+          
+<div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                  <div className="flex items-center space-x-2">
+                    <Calendar size={16} className="text-green-600" />
+                 
+                  <span className="text-sm text-gray-600">
+                    {formatDate(selectedProperty.created_on)}
+                  </span>
+                     </div>
+                </div>
+            <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                  <div className="flex items-center space-x-2">
+                    <Edit size={16} className="text-blue-600" />
+                    <span className="text-sm text-gray-600">
+                    {formatDate(selectedProperty.updated_on)}
+                  </span>
+                  </div>
+                  
+                </div>
+              </div>
             {/* Notes Card */}
             {selectedProperty.note && (
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
@@ -705,7 +806,7 @@ Location is accurate up to *${radiusText}*
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  copyToClipboard(person.phone);
+                                  copyToClipboard(person.phone, 'details');
                                 }}
                                 className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
                                 title="Copy number"
@@ -752,7 +853,8 @@ Location is accurate up to *${radiusText}*
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   copyToClipboard(
-                                    person.alternative_contact_details
+                                    person.alternative_contact_details,
+                                    'details'
                                   );
                                 }}
                                 className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
@@ -798,59 +900,92 @@ Location is accurate up to *${radiusText}*
               )}
             </div>
 
-            {/* Location & Coverage Card */}
-            <div className="bg-white border rounded-xl p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-light flex items-center text-gray-900">
-                  <Navigation size={14} className="mr-2 text-gray-600" />
-                  Location & Coverage
-                </h4>
-                <button
-                  onClick={() => setShowLocationModal(true)}
-                  className="flex items-center space-x-1 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg transition-colors text-sm"
-                >
-                  <Edit size={14} />
-                  <span>{formatLocationText()}</span>
-                </button>
-              </div>
-              <div className="space-y-3">
-                <div className="bg-gray-50 p-3 rounded-lg">
-                  <div className="text-sm text-gray-500 mb-1">Coordinates</div>
-                  <div className="font-mono text-sm text-gray-900">
-                    {selectedProperty.location.latitude.toFixed(6)}°N,{" "}
-                    {selectedProperty.location.longitude.toFixed(6)}°E
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Sharing Options */}
+            {/* Enhanced Sharing Options */}
             <div className="bg-white border rounded-xl p-4">
               <h4 className="text-sm font-light mb-3 flex items-center text-gray-900">
                 <Share2 size={14} className="mr-2 text-gray-600" />
                 Share Property
               </h4>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={sharePropertyDetails}
-                  className="flex items-center justify-center space-x-2 px-4 py-3 bg-green-50 hover:bg-green-100 text-green-700 rounded-lg transition-colors border border-green-200"
-                >
-                  <MessageCircle size={16} />
-                  <span className="text-sm font-medium">Share Details</span>
-                </button>
-                {hasValidLocation() && (
+              <div className="grid grid-cols-1 gap-3">
+                {/* Share Details Row */}
+                <div className="grid grid-cols-2 gap-3">
                   <button
-                    onClick={shareLocation}
+                    onClick={sharePropertyDetails}
+                    className="flex items-center justify-center space-x-2 px-4 py-3 bg-green-50 hover:bg-green-100 text-green-700 rounded-lg transition-colors border border-green-200"
+                  >
+                    <MessageCircle size={16} />
+                    <span className="text-sm font-medium">Details</span>
+                  </button>
+                  <button
+                    onClick={() => copyToClipboard(generatePropertyDetailsText(), 'details')}
                     className="flex items-center justify-center space-x-2 px-4 py-3 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors border border-blue-200"
                   >
-                    <MapPin size={16} />
-                    <span className="text-sm font-medium">Share Location</span>
+                    {copiedStates.details ? (
+                      <Check size={16} className="text-green-600" />
+                    ) : (
+                      <Copy size={16} />
+                    )}
+                    <span className="text-sm font-medium">
+                      {copiedStates.details ? 'Copied!' : 'Details'}
+                    </span>
                   </button>
+                </div>
+
+                {/* Share Details with Location Row */}
+                {hasValidLocation() && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={sharePropertyDetailsWithLocation}
+                      className="flex items-center justify-center space-x-2 px-4 py-3 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg transition-colors border border-purple-200"
+                    >
+                      <MessageCircle size={16} />
+                      <span className="text-sm font-medium">D+L </span>
+                    </button>
+                    <button
+                      onClick={() => copyToClipboard(generatePropertyDetailsText(true), 'detailsWithLocation')}
+                      className="flex items-center justify-center space-x-2 px-4 py-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg transition-colors border border-indigo-200"
+                    >
+                      {copiedStates.detailsWithLocation ? (
+                        <Check size={16} className="text-green-600" />
+                      ) : (
+                        <Copy size={16} />
+                      )}
+                      <span className="text-sm font-medium">
+                        {copiedStates.detailsWithLocation ? 'Copied!' : 'D+L'}
+                      </span>
+                    </button>
+                  </div>
+                )}
+
+                {/* Share Location Only Row */}
+                {hasValidLocation() && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={shareLocation}
+                      className="flex items-center justify-center space-x-2 px-4 py-3 bg-orange-50 hover:bg-orange-100 text-orange-700 rounded-lg transition-colors border border-orange-200"
+                    >
+                      <MessageCircle size={16} />
+                      <span className="text-sm font-medium">Location</span>
+                    </button>
+                    <button
+                      onClick={() => copyToClipboard(generateLocationText(), 'location')}
+                      className="flex items-center justify-center space-x-2 px-4 py-3 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg transition-colors border border-teal-200"
+                    >
+                      {copiedStates.location ? (
+                        <Check size={16} className="text-green-600" />
+                      ) : (
+                        <Copy size={16} />
+                      )}
+                      <span className="text-sm font-medium">
+                        {copiedStates.location ? 'Copied!' : 'Location'}
+                      </span>
+                    </button>
+                  </div>
                 )}
               </div>
               {!hasValidLocation() && (
                 <p className="text-xs text-gray-500 mt-2 text-center">
-                  Add location to enable location sharing
+                  Add location to enable location sharing and copying
                 </p>
               )}
             </div>

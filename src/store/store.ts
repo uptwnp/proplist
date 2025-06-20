@@ -43,6 +43,8 @@ const STORAGE_KEYS = {
   PERSONS: "pms_persons",
   CONNECTIONS: "pms_connections",
   LINKS: "pms_links",
+  PROPERTY_DETAILS: "pms_property_details", // New key for individual property details
+  PERSON_DETAILS: "pms_person_details", // New key for individual person details
   LAST_SYNC: "pms_last_sync",
   VERSION: "pms_version",
   FILTERS: "pms_filters",
@@ -110,6 +112,34 @@ const storage = {
   getLastSync: (): number => {
     return storage.get(STORAGE_KEYS.LAST_SYNC) || 0;
   },
+
+  // Helper functions for detail caching
+  setPropertyDetails: (propertyId: number, details: any) => {
+    const allDetails = storage.get(STORAGE_KEYS.PROPERTY_DETAILS) || {};
+    allDetails[propertyId] = details;
+    storage.set(STORAGE_KEYS.PROPERTY_DETAILS, allDetails);
+  },
+
+  getPropertyDetails: (propertyId: number) => {
+    const allDetails = storage.get(STORAGE_KEYS.PROPERTY_DETAILS) || {};
+    return allDetails[propertyId] || null;
+  },
+
+  setPersonDetails: (personId: number, details: any) => {
+    const allDetails = storage.get(STORAGE_KEYS.PERSON_DETAILS) || {};
+    allDetails[personId] = details;
+    storage.set(STORAGE_KEYS.PERSON_DETAILS, allDetails);
+  },
+
+  getPersonDetails: (personId: number) => {
+    const allDetails = storage.get(STORAGE_KEYS.PERSON_DETAILS) || {};
+    return allDetails[personId] || null;
+  },
+
+  clearDetailsCaches: () => {
+    localStorage.removeItem(STORAGE_KEYS.PROPERTY_DETAILS);
+    localStorage.removeItem(STORAGE_KEYS.PERSON_DETAILS);
+  },
 };
 
 interface LoadingStates {
@@ -171,6 +201,8 @@ interface Store {
     connections: Promise<void> | null;
     links: Promise<void> | null;
     allData: Promise<void> | null;
+    propertyDetails: Map<number, Promise<void>>;
+    personDetails: Map<number, Promise<void>>;
   };
 
   // Actions
@@ -310,6 +342,8 @@ export const useStore = create<Store>((set, get) => ({
     connections: null,
     links: null,
     allData: null,
+    propertyDetails: new Map(),
+    personDetails: new Map(),
   },
 
   // Load data from cache immediately
@@ -519,8 +553,13 @@ export const useStore = create<Store>((set, get) => ({
         connections: null,
         links: null,
         allData: null,
+        propertyDetails: new Map(),
+        personDetails: new Map(),
       },
     });
+
+    // Clear detail caches when refreshing
+    storage.clearDetailsCaches();
 
     try {
       await get().loadAllData();
@@ -785,16 +824,25 @@ export const useStore = create<Store>((set, get) => ({
     return loadPromise;
   },
 
-  // Load detailed data for a specific property
+  // Load detailed data for a specific property with caching
   loadPropertyDetails: async (id: number) => {
-    try {
-      const { property, persons, connections, links } =
-        await propertyAPI.getById(id);
+    const state = get();
 
-      // Update the property in the store with validated location
+    // Check if already loading
+    if (state.dataLoadingPromises.propertyDetails.has(id)) {
+      console.log(`Property ${id} details already loading, returning existing promise`);
+      return state.dataLoadingPromises.propertyDetails.get(id)!;
+    }
+
+    // Check cache first
+    const cachedDetails = storage.getPropertyDetails(id);
+    if (cachedDetails) {
+      console.log(`Property ${id} details found in cache`);
+      
+      // Update the property in the store with cached data
       const validatedProperty = {
-        ...property,
-        location: ensureValidLocation(property.location),
+        ...cachedDetails.property,
+        location: ensureValidLocation(cachedDetails.property.location),
       };
 
       set((state) => {
@@ -802,25 +850,19 @@ export const useStore = create<Store>((set, get) => ({
           p.id === id ? validatedProperty : p
         );
 
-        // Merge new persons, connections, and links
+        // Merge cached persons, connections, and links
         const existingPersonIds = new Set(state.persons.map((p) => p.id));
-        const newPersons = persons.filter((p) => !existingPersonIds.has(p.id));
+        const newPersons = cachedDetails.persons.filter((p: Person) => !existingPersonIds.has(p.id));
 
         const updatedPersons = [...state.persons, ...newPersons];
         const updatedConnections = [
           ...state.connections.filter((c) => c.property_id !== id),
-          ...connections,
+          ...cachedDetails.connections,
         ];
         const updatedLinks = [
           ...state.links.filter((l) => l.property_id !== id),
-          ...links,
+          ...cachedDetails.links,
         ];
-
-        // Update cache
-        storage.set(STORAGE_KEYS.PROPERTIES, updatedProperties);
-        storage.set(STORAGE_KEYS.PERSONS, updatedPersons);
-        storage.set(STORAGE_KEYS.CONNECTIONS, updatedConnections);
-        storage.set(STORAGE_KEYS.LINKS, updatedLinks);
 
         return {
           properties: updatedProperties,
@@ -833,29 +875,122 @@ export const useStore = create<Store>((set, get) => ({
 
       get().applyFilters();
       get().applyPersonFilters();
-    } catch (error) {
-      console.error("Failed to load property details:", error);
-      throw error;
+      return Promise.resolve();
     }
+
+    console.log(`Loading property ${id} details from API...`);
+
+    const loadPromise = (async () => {
+      try {
+        const { property, persons, connections, links } =
+          await propertyAPI.getById(id);
+
+        // Cache the details
+        storage.setPropertyDetails(id, { property, persons, connections, links });
+
+        // Update the property in the store with validated location
+        const validatedProperty = {
+          ...property,
+          location: ensureValidLocation(property.location),
+        };
+
+        set((state) => {
+          const updatedProperties = state.properties.map((p) =>
+            p.id === id ? validatedProperty : p
+          );
+
+          // Merge new persons, connections, and links
+          const existingPersonIds = new Set(state.persons.map((p) => p.id));
+          const newPersons = persons.filter((p) => !existingPersonIds.has(p.id));
+
+          const updatedPersons = [...state.persons, ...newPersons];
+          const updatedConnections = [
+            ...state.connections.filter((c) => c.property_id !== id),
+            ...connections,
+          ];
+          const updatedLinks = [
+            ...state.links.filter((l) => l.property_id !== id),
+            ...links,
+          ];
+
+          // Update cache
+          storage.set(STORAGE_KEYS.PROPERTIES, updatedProperties);
+          storage.set(STORAGE_KEYS.PERSONS, updatedPersons);
+          storage.set(STORAGE_KEYS.CONNECTIONS, updatedConnections);
+          storage.set(STORAGE_KEYS.LINKS, updatedLinks);
+
+          return {
+            properties: updatedProperties,
+            persons: updatedPersons,
+            connections: updatedConnections,
+            links: updatedLinks,
+            selectedProperty: validatedProperty,
+          };
+        });
+
+        get().applyFilters();
+        get().applyPersonFilters();
+        
+        console.log(`Property ${id} details loaded and cached successfully`);
+      } catch (error) {
+        console.error("Failed to load property details:", error);
+        throw error;
+      } finally {
+        // Remove from loading promises
+        set((state) => {
+          const newMap = new Map(state.dataLoadingPromises.propertyDetails);
+          newMap.delete(id);
+          return {
+            dataLoadingPromises: {
+              ...state.dataLoadingPromises,
+              propertyDetails: newMap,
+            },
+          };
+        });
+      }
+    })();
+
+    // Add to loading promises
+    set((state) => {
+      const newMap = new Map(state.dataLoadingPromises.propertyDetails);
+      newMap.set(id, loadPromise);
+      return {
+        dataLoadingPromises: {
+          ...state.dataLoadingPromises,
+          propertyDetails: newMap,
+        },
+      };
+    });
+
+    return loadPromise;
   },
 
-  // Load detailed data for a specific person
+  // Load detailed data for a specific person with caching
   loadPersonDetails: async (id: number) => {
-    try {
-      const { person, properties, connections, links } =
-        await personAPI.getById(id);
+    const state = get();
 
-      // Update the person in the store
+    // Check if already loading
+    if (state.dataLoadingPromises.personDetails.has(id)) {
+      console.log(`Person ${id} details already loading, returning existing promise`);
+      return state.dataLoadingPromises.personDetails.get(id)!;
+    }
+
+    // Check cache first
+    const cachedDetails = storage.getPersonDetails(id);
+    if (cachedDetails) {
+      console.log(`Person ${id} details found in cache`);
+      
+      // Update the person in the store with cached data
       set((state) => {
         const updatedPersons = state.persons.map((p) =>
-          p.id === id ? person : p
+          p.id === id ? cachedDetails.person : p
         );
 
-        // Merge new properties, connections, and links
+        // Merge cached properties, connections, and links
         const existingPropertyIds = new Set(state.properties.map((p) => p.id));
-        const newProperties = properties
-          .filter((p) => !existingPropertyIds.has(p.id))
-          .map((property) => ({
+        const newProperties = cachedDetails.properties
+          .filter((p: Property) => !existingPropertyIds.has(p.id))
+          .map((property: Property) => ({
             ...property,
             location: ensureValidLocation(property.location),
           }));
@@ -863,36 +998,116 @@ export const useStore = create<Store>((set, get) => ({
         const updatedProperties = [...state.properties, ...newProperties];
         const updatedConnections = [
           ...state.connections.filter((c) => c.person_id !== id),
-          ...connections,
+          ...cachedDetails.connections,
         ];
         const updatedLinks = [
           ...state.links,
-          ...links.filter(
-            (l) => !state.links.some((existing) => existing.id === l.id)
+          ...cachedDetails.links.filter(
+            (l: Link) => !state.links.some((existing) => existing.id === l.id)
           ),
         ];
-
-        // Update cache
-        storage.set(STORAGE_KEYS.PERSONS, updatedPersons);
-        storage.set(STORAGE_KEYS.PROPERTIES, updatedProperties);
-        storage.set(STORAGE_KEYS.CONNECTIONS, updatedConnections);
-        storage.set(STORAGE_KEYS.LINKS, updatedLinks);
 
         return {
           persons: updatedPersons,
           properties: updatedProperties,
           connections: updatedConnections,
           links: updatedLinks,
-          selectedPerson: person,
+          selectedPerson: cachedDetails.person,
         };
       });
 
       get().applyFilters();
       get().applyPersonFilters();
-    } catch (error) {
-      console.error("Failed to load person details:", error);
-      throw error;
+      return Promise.resolve();
     }
+
+    console.log(`Loading person ${id} details from API...`);
+
+    const loadPromise = (async () => {
+      try {
+        const { person, properties, connections, links } =
+          await personAPI.getById(id);
+
+        // Cache the details
+        storage.setPersonDetails(id, { person, properties, connections, links });
+
+        // Update the person in the store
+        set((state) => {
+          const updatedPersons = state.persons.map((p) =>
+            p.id === id ? person : p
+          );
+
+          // Merge new properties, connections, and links
+          const existingPropertyIds = new Set(state.properties.map((p) => p.id));
+          const newProperties = properties
+            .filter((p) => !existingPropertyIds.has(p.id))
+            .map((property) => ({
+              ...property,
+              location: ensureValidLocation(property.location),
+            }));
+
+          const updatedProperties = [...state.properties, ...newProperties];
+          const updatedConnections = [
+            ...state.connections.filter((c) => c.person_id !== id),
+            ...connections,
+          ];
+          const updatedLinks = [
+            ...state.links,
+            ...links.filter(
+              (l) => !state.links.some((existing) => existing.id === l.id)
+            ),
+          ];
+
+          // Update cache
+          storage.set(STORAGE_KEYS.PERSONS, updatedPersons);
+          storage.set(STORAGE_KEYS.PROPERTIES, updatedProperties);
+          storage.set(STORAGE_KEYS.CONNECTIONS, updatedConnections);
+          storage.set(STORAGE_KEYS.LINKS, updatedLinks);
+
+          return {
+            persons: updatedPersons,
+            properties: updatedProperties,
+            connections: updatedConnections,
+            links: updatedLinks,
+            selectedPerson: person,
+          };
+        });
+
+        get().applyFilters();
+        get().applyPersonFilters();
+        
+        console.log(`Person ${id} details loaded and cached successfully`);
+      } catch (error) {
+        console.error("Failed to load person details:", error);
+        throw error;
+      } finally {
+        // Remove from loading promises
+        set((state) => {
+          const newMap = new Map(state.dataLoadingPromises.personDetails);
+          newMap.delete(id);
+          return {
+            dataLoadingPromises: {
+              ...state.dataLoadingPromises,
+              personDetails: newMap,
+            },
+          };
+        });
+      }
+    })();
+
+    // Add to loading promises
+    set((state) => {
+      const newMap = new Map(state.dataLoadingPromises.personDetails);
+      newMap.set(id, loadPromise);
+      return {
+        dataLoadingPromises: {
+          ...state.dataLoadingPromises,
+          personDetails: newMap,
+        },
+      };
+    });
+
+    return loadPromise;
   },
 
   // Property CRUD with immediate state updates
