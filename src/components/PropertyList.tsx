@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStore } from '../store/store';
 import {
   Building,
@@ -37,6 +37,8 @@ const PropertyList: React.FC = () => {
     isLoading,
     error,
     refreshData,
+    loadProperties, // Add this to ensure properties are loaded
+    applyFilters, // Add this to ensure filters are applied
   } = useStore();
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -47,6 +49,27 @@ const PropertyList: React.FC = () => {
   const [locationModalProperty, setLocationModalProperty] = useState<
     (typeof filteredProperties)[0] | null
   >(null);
+
+  // FIXED: Ensure properties are loaded and filters applied when component mounts
+  useEffect(() => {
+    console.log("PropertyList mounted, checking data:", {
+      propertiesCount: properties.length,
+      filteredPropertiesCount: filteredProperties.length,
+    });
+
+    if (properties.length === 0) {
+      console.log("PropertyList: No properties data, loading...");
+      loadProperties().catch((error) => {
+        console.error("Failed to load properties:", error);
+      });
+    } else if (filteredProperties.length === 0 && properties.length > 0) {
+      // If we have properties but no filtered properties, apply filters
+      console.log(
+        "PropertyList: Have properties but no filtered properties, applying filters..."
+      );
+      applyFilters();
+    }
+  }, [loadProperties, properties.length, filteredProperties.length, applyFilters]);
 
   const totalPages = Math.ceil(filteredProperties.length / ITEMS_PER_PAGE);
 
@@ -101,7 +124,7 @@ const PropertyList: React.FC = () => {
 
   const renderRating = (rating?: number) => {
     // Only show rating if it exists and is greater than 0
-    if (!rating || rating === 0) return 0;
+    if (!rating || rating === 0) return null;
 
     return (
       <div className="flex items-center space-x-1">
@@ -116,6 +139,20 @@ const PropertyList: React.FC = () => {
   const handleRetry = () => {
     refreshData();
   };
+
+  // Show loading state only when initially loading and no data
+  if (isLoading && properties.length === 0) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-4" />
+            <p className="text-gray-600">Loading properties...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Show error state only if we have an error and no cached data
   if (error && properties.length === 0) {
@@ -166,6 +203,12 @@ const PropertyList: React.FC = () => {
                     No properties found matching your criteria.
                   </p>
                   <p className="text-sm text-gray-400">Try adjusting your search or filters</p>
+                  <button
+                    onClick={() => applyFilters()}
+                    className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 text-sm"
+                  >
+                    Refresh Filters
+                  </button>
                 </>
               )}
             </div>

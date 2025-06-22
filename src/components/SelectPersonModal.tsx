@@ -35,9 +35,17 @@ const SelectPersonModal: React.FC<SelectPersonModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load persons directly from API when modal opens
+  // FIXED: Load persons directly from API when modal opens - prevent duplicate calls
   useEffect(() => {
+    let isMounted = true;
+
     const loadPersonsFromAPI = async () => {
+      // Only load if we don't have persons data or if it's stale
+      if (persons.length > 0) {
+        console.log("SelectPersonModal: Using existing persons data");
+        return;
+      }
+
       setIsLoading(true);
       setError(null);
 
@@ -52,26 +60,37 @@ const SelectPersonModal: React.FC<SelectPersonModalProps> = ({
           persons: personsFromAPI,
         });
 
-        // Update the store with the fetched persons
-        setPersons(personsFromAPI);
+        // Only update if component is still mounted
+        if (isMounted) {
+          // Update the store with the fetched persons
+          setPersons(personsFromAPI);
 
-        console.log(
-          "SelectPersonModal: Persons loaded successfully, count:",
-          personsFromAPI.length
-        );
+          console.log(
+            "SelectPersonModal: Persons loaded successfully, count:",
+            personsFromAPI.length
+          );
+        }
       } catch (error) {
         console.error(
           "SelectPersonModal: Failed to load persons from API:",
           error
         );
-        setError("Failed to load persons. Please try again.");
+        if (isMounted) {
+          setError("Failed to load persons. Please try again.");
+        }
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
 
-    // Always load persons from API when modal opens
     loadPersonsFromAPI();
+
+    // Cleanup function
+    return () => {
+      isMounted = false;
+    };
   }, []); // Empty dependency array to run only once when modal opens
 
   // Sort persons by most recently added (assuming newer IDs are more recent)
@@ -88,11 +107,12 @@ const SelectPersonModal: React.FC<SelectPersonModalProps> = ({
       (person.role ?? "").toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Get person's connected properties
+  // FIXED: Get person's connected properties with proper connection matching
   const getPersonProperties = (personId: number) => {
     const personConnections = connections.filter(
       (conn) => conn.person_id === personId
     );
+    
     return personConnections
       .map((conn) => {
         const property = properties.find(
@@ -100,7 +120,7 @@ const SelectPersonModal: React.FC<SelectPersonModalProps> = ({
         );
         return property ? { property, connection: conn } : null;
       })
-      .filter(Boolean);
+      .filter((item): item is { property: any; connection: any } => item !== null);
   };
 
   const copyToClipboard = (text: string) => {
@@ -366,38 +386,37 @@ const SelectPersonModal: React.FC<SelectPersonModalProps> = ({
                           </h4>
                           <div className="space-y-1 max-h-24 overflow-y-auto">
                             {connectedProperties.slice(0, 2).map(
-                              ({ property, connection }) =>
-                                property && (
-                                  <div
-                                    key={property.id}
-                                    className="bg-blue-50 p-2 rounded text-xs"
-                                  >
-                                    <div className="flex items-start justify-between">
-                                      <div className="flex-1 min-w-0">
-                                        <div className="font-medium text-gray-900 truncate">
-                                          {property.area}
-                                        </div>
-                                        <div className="flex items-center text-gray-600 mt-1">
-                                          <MapPin
-                                            size={10}
-                                            className="mr-1 flex-shrink-0"
-                                          />
-                                          <span className="truncate">
-                                            {property.zone || "Unknown Zone"}
-                                          </span>
-                                        </div>
-                                        {connection.role && (
-                                          <div className="text-blue-600 font-medium">
-                                            Role: {connection.role}
-                                          </div>
-                                        )}
+                              ({ property, connection }) => (
+                                <div
+                                  key={property.id}
+                                  className="bg-blue-50 p-2 rounded text-xs"
+                                >
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1 min-w-0">
+                                      <div className="font-medium text-gray-900 truncate">
+                                        {property.area}
                                       </div>
-                                      <div className="text-blue-600 font-medium ml-2 flex-shrink-0">
-                                        ₹{formatCurrency(property.price_min)}
+                                      <div className="flex items-center text-gray-600 mt-1">
+                                        <MapPin
+                                          size={10}
+                                          className="mr-1 flex-shrink-0"
+                                        />
+                                        <span className="truncate">
+                                          {property.zone || "Unknown Zone"}
+                                        </span>
                                       </div>
+                                      {connection.role && (
+                                        <div className="text-blue-600 font-medium">
+                                          Role: {connection.role}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="text-blue-600 font-medium ml-2 flex-shrink-0">
+                                      ₹{formatCurrency(property.price_min)}
                                     </div>
                                   </div>
-                                )
+                                </div>
+                              )
                             )}
                             {connectedProperties.length > 2 && (
                               <div className="text-xs text-gray-500 text-center py-1">

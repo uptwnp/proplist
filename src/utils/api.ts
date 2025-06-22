@@ -200,7 +200,7 @@ function transformPersonFromNewAPI(apiData: any): Person {
     about: apiData.about || "",
     role: apiData.role || "Other Related",
     alternative_contact_details:
-      apiData.alternative_contact_details ||
+      apiData.alternative_contact_details_details ||
       apiData.alternative_contact_details ||
       "",
   };
@@ -348,13 +348,13 @@ export const personAPI = {
   ): Promise<{ success: boolean; id: number }> =>
     postData(API_CONFIG.tables.persons, {
       ...person,
-      alternative_contact_details: person.alternative_contact_details,
+      alternative_contact_details_details: person.alternative_contact_details,
     }),
 
   update: (person: Person): Promise<{ success: boolean }> =>
     putData(API_CONFIG.tables.persons, {
       ...person,
-      alternative_contact_details: person.alternative_contact_details,
+      alternative_contact_details_details: person.alternative_contact_details,
     }),
 
   delete: (id: number): Promise<{ success: boolean }> =>

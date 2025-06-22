@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { Search, X, SlidersHorizontal, RefreshCw } from "lucide-react";
 import { useStore } from "../store/store";
 import PropertyList from "./PropertyList";
@@ -25,14 +25,20 @@ const Sidebar: React.FC = () => {
     applyPersonFilters,
   } = useStore();
 
-  // Load data when sidebar opens or tab changes - with proper deduplication
+  // Use ref to prevent duplicate loads
+  const hasLoadedProperties = useRef(false);
+  const hasLoadedPersons = useRef(false);
+
+  // Load data when sidebar opens or tab changes - FIXED: Prevent duplicate loads
   useEffect(() => {
     if (isSidebarOpen) {
-      if (activeTab === "properties") {
-        console.log("Sidebar: Loading properties for properties tab");
+      if (activeTab === "properties" && !hasLoadedProperties.current) {
+        console.log("Sidebar: Loading properties for properties tab (first time)");
+        hasLoadedProperties.current = true;
         loadProperties(); // This now has built-in deduplication
-      } else if (activeTab === "persons") {
-        console.log("Sidebar: Loading persons for persons tab");
+      } else if (activeTab === "persons" && !hasLoadedPersons.current) {
+        console.log("Sidebar: Loading persons for persons tab (first time)");
+        hasLoadedPersons.current = true;
         // Load persons data and ensure filters are applied
         loadPersons()
           .then(() => {
@@ -54,6 +60,14 @@ const Sidebar: React.FC = () => {
     loadPersons,
     applyPersonFilters,
   ]);
+
+  // Reset load flags when data is refreshed
+  useEffect(() => {
+    if (lastSyncTime) {
+      hasLoadedProperties.current = false;
+      hasLoadedPersons.current = false;
+    }
+  }, [lastSyncTime]);
 
   // Calculate active filter count for properties
   const getPropertyFilterCount = () => {
@@ -125,6 +139,9 @@ const Sidebar: React.FC = () => {
 
   // Handle manual refresh
   const handleRefresh = () => {
+    // Reset load flags to allow fresh loading
+    hasLoadedProperties.current = false;
+    hasLoadedPersons.current = false;
     refreshData();
   };
 

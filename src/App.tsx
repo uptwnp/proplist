@@ -34,6 +34,7 @@ function App() {
 
   // Use ref to prevent duplicate initial loads
   const hasInitialized = useRef(false);
+  const isInitializing = useRef(false);
 
   // Version management for cache clearing
   useEffect(() => {
@@ -93,19 +94,29 @@ function App() {
     };
   }, [setMobileView]);
 
-  // Initialize app with cache-first approach
+  // Initialize app with cache-first approach - FIXED: Single initialization
   useEffect(() => {
-    if (!hasInitialized.current) {
+    if (!hasInitialized.current && !isInitializing.current) {
+      isInitializing.current = true;
       hasInitialized.current = true;
+      
       console.log("App initializing with cache-first approach...");
 
-      // Load from cache immediately
-      loadFromCache();
+      const initializeApp = async () => {
+        try {
+          // Load from cache immediately
+          await loadFromCache();
 
-      // Then load fresh data from API
-      loadAllData().catch((error) => {
-        console.error("Failed to load fresh data:", error);
-      });
+          // Then load fresh data from API
+          await loadAllData();
+        } catch (error) {
+          console.error("Failed to initialize app:", error);
+        } finally {
+          isInitializing.current = false;
+        }
+      };
+
+      initializeApp();
     }
   }, [loadFromCache, loadAllData]);
 
@@ -165,6 +176,7 @@ function App() {
           <button
             onClick={() => {
               hasInitialized.current = false;
+              isInitializing.current = false;
               loadFromCache();
               loadAllData();
             }}
