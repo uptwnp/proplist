@@ -1,32 +1,34 @@
-import React, { useEffect, useCallback, useState, useMemo } from 'react';
-import Map, {
-  Marker,
-  NavigationControl,
-  Popup,
-  Source,
-  Layer,
-} from 'react-map-gl';
-import maplibreGl from 'maplibre-gl';
-import { useStore } from '../store/store';
-import { Layers, Map as MapIcon, Home, Crosshair, MapPin, Eye, Store, Building2, Building, Wheat, Warehouse, Factory, Zap, IndianRupee, ExternalLink, Navigation, ShoppingBag, TreePine, Truck, Wrench, Landmark, LandPlot, Grid2x2 as Grid2x2Check } from 'lucide-react';
-import { Property } from '../types';
-import { useEffect } from 'react';
+import { create } from "zustand";
+import {
+  Property,
+  Person,
+  Connection,
+  Link,
+  FilterState,
+  PersonFilterState,
+  MapViewport,
+  SortOption,
+} from "../types";
+import {
+  propertyAPI,
+  personAPI,
+  connectionAPI,
+  linkAPI,
+  extractAllDataFromProperties,
+} from "../utils/api";
 import {
   DEFAULT_COORDINATES,
-  PROPERTY_TYPE_COLORS,
-  PROPERTY_TYPE_ICONS,
-  MAP_CONFIG,
-} from '../constants';
-import { formatCurrency } from '../utils/formatters';
-import circle from '@turf/circle';
-import { point } from '@turf/helpers';
+  PRICE_RANGES,
+  SIZE_RANGES,
+  APP_VERSION,
+} from "../constants";
 
 // Helper function to ensure valid location
 const ensureValidLocation = (location: any) => {
   if (
     !location ||
-    typeof location.latitude !== 'number' ||
-    typeof location.longitude !== 'number' ||
+    typeof location.latitude !== "number" ||
+    typeof location.longitude !== "number" ||
     isNaN(location.latitude) ||
     isNaN(location.longitude)
   ) {
@@ -35,701 +37,1749 @@ const ensureValidLocation = (location: any) => {
   return location;
 };
 
-// Icon component mapping using the constants - Updated with available icons
-const IconComponents = {
-  LandPlot,
-  Store,
-  Home, // Changed from House to Home
-  Building2,
-  Building,
-  Wheat,
-  TreePine,
-  Warehouse,
-  Factory,
-  Grid2x2Check,
-  MapPin, // Changed from MapPinHouse to MapPin
+// Local Storage Keys
+const STORAGE_KEYS = {
+  PROPERTIES: "pms_properties",
+  PERSONS: "pms_persons",
+  CONNECTIONS: "pms_connections",
+  LINKS: "pms_links",
+  PROPERTY_DETAILS: "pms_property_details", // New key for individual property details
+  PERSON_DETAILS: "pms_person_details", // New key for individual person details
+  LAST_SYNC: "pms_last_sync",
+  VERSION: "pms_version",
+  FILTERS: "pms_filters",
+  PERSON_FILTERS: "pms_person_filters",
+  MAP_VIEWPORT: "pms_map_viewport", // New key for map viewport
 };
 
-const MapView: React.FC = () => {
-  const {
-    filteredProperties,
-    mapViewport,
-    setMapViewport,
-    selectedProperty,
-    setSelectedProperty,
-    togglePropertyDetail,
-    togglePersonDetail,
-    togglePropertyForm,
-    properties,
-    setFilteredProperties,
-    isLiveView,
-    setIsLiveView,
-    isPropertyDetailOpen,
-    isPersonDetailOpen,
-  } = useStore();
-
-  const [popupInfo, setPopupInfo] = useState<Property | null>(null);
-  const [isSatelliteView, setIsSatelliteView] = useState(() => {
-    // Remember satellite view preference
-    const saved = localStorage.getItem('mapSatelliteView');
-    return saved ? JSON.parse(saved) : true;
-  });
-  const [userLocation, setUserLocation] = useState<{
-    latitude: number;
-    longitude: number;
-  } | null>(null);
-  const [watchId, setWatchId] = useState<number | null>(null);
-
-  // Save satellite view preference
-  useEffect(() => {
-    localStorage.setItem('mapSatelliteView', JSON.stringify(isSatelliteView));
-  }, [isSatelliteView]);
-
-  // Live View Effect - Update filtered properties based on map bounds
-  useEffect(() => {
-    if (!isLiveView) {
-      // When Live View is turned off, don't call applyFilters here
-      // It's already handled by the handleLiveViewToggle function
-      return;
+// Local Storage Helper Functions
+const storage = {
+  set: (key: string, data: any) => {
+    try {
+      localStorage.setItem(
+        key,
+        JSON.stringify({
+          data,
+          timestamp: Date.now(),
+          version: APP_VERSION,
+        })
+      );
+    } catch (error) {
+      console.warn("Failed to save to localStorage:", error);
     }
+  },
 
-    if (!mapViewport.bounds) return;
+  get: (key: string) => {
+    try {
+      const stored = localStorage.getItem(key);
+      if (!stored) return null;
 
-    const { bounds } = mapViewport;
-    if (!bounds) return;
+      const parsed = JSON.parse(stored);
 
-    // Filter properties that are within the current map bounds
-    const propertiesInView = properties.filter((property) => {
-      const location = ensureValidLocation(property.location);
-      
-      // Skip properties with default coordinates (no real location)
-      if (
-        location.latitude === DEFAULT_COORDINATES.latitude &&
-        location.longitude === DEFAULT_COORDINATES.longitude
-      ) {
-        return false;
+      // Check version compatibility
+      if (parsed.version !== APP_VERSION) {
+        console.log(`Version mismatch for ${key}, clearing cache`);
+        localStorage.removeItem(key);
+        return null;
       }
 
-      return (
-        location.latitude >= bounds.south &&
-        location.latitude <= bounds.north &&
-        location.longitude >= bounds.west &&
-        location.longitude <= bounds.east
-      );
-    });
+      // Check if data is too old (24 hours) - except for filters which should persist longer
+      const maxAge = key.includes("filters")
+        ? 7 * 24 * 60 * 60 * 1000
+        : 24 * 60 * 60 * 1000; // 7 days for filters, 24 hours for data
+      if (Date.now() - parsed.timestamp > maxAge) {
+        console.log(`Cache expired for ${key}, clearing`);
+        localStorage.removeItem(key);
+        return null;
+      }
 
-    // Only update if the filtered properties have actually changed
-    if (JSON.stringify(propertiesInView.map(p => p.id)) !== JSON.stringify(filteredProperties.map(p => p.id))) {
-      console.log('Live View: Updating properties in view', {
-        total: properties.length,
-        inView: propertiesInView.length,
-        bounds
+      return parsed.data;
+    } catch (error) {
+      console.warn("Failed to read from localStorage:", error);
+      return null;
+    }
+  },
+
+  clear: () => {
+    Object.values(STORAGE_KEYS).forEach((key) => {
+      localStorage.removeItem(key);
+    });
+  },
+
+  setLastSync: () => {
+    storage.set(STORAGE_KEYS.LAST_SYNC, Date.now());
+  },
+
+  getLastSync: (): number => {
+    return storage.get(STORAGE_KEYS.LAST_SYNC) || 0;
+  },
+
+  // Helper functions for detail caching
+  setPropertyDetails: (propertyId: number, details: any) => {
+    const allDetails = storage.get(STORAGE_KEYS.PROPERTY_DETAILS) || {};
+    allDetails[propertyId] = details;
+    storage.set(STORAGE_KEYS.PROPERTY_DETAILS, allDetails);
+  },
+
+  getPropertyDetails: (propertyId: number) => {
+    const allDetails = storage.get(STORAGE_KEYS.PROPERTY_DETAILS) || {};
+    return allDetails[propertyId] || null;
+  },
+
+  setPersonDetails: (personId: number, details: any) => {
+    const allDetails = storage.get(STORAGE_KEYS.PERSON_DETAILS) || {};
+    allDetails[personId] = details;
+    storage.set(STORAGE_KEYS.PERSON_DETAILS, allDetails);
+  },
+
+  getPersonDetails: (personId: number) => {
+    const allDetails = storage.get(STORAGE_KEYS.PERSON_DETAILS) || {};
+    return allDetails[personId] || null;
+  },
+
+  clearDetailsCaches: () => {
+    localStorage.removeItem(STORAGE_KEYS.PROPERTY_DETAILS);
+    localStorage.removeItem(STORAGE_KEYS.PERSON_DETAILS);
+  },
+
+  // Map viewport helpers
+  setMapViewport: (viewport: MapViewport) => {
+    storage.set(STORAGE_KEYS.MAP_VIEWPORT, viewport);
+  },
+
+  getMapViewport: (): MapViewport | null => {
+    return storage.get(STORAGE_KEYS.MAP_VIEWPORT);
+  },
+};
+
+interface LoadingStates {
+  properties: boolean;
+  persons: boolean;
+  connections: boolean;
+  links: boolean;
+  creating: boolean;
+  updating: boolean;
+  deleting: boolean;
+}
+
+interface Store {
+  // Data
+  properties: Property[];
+  persons: Person[];
+  connections: Connection[];
+  links: Link[];
+
+  // Filtered data
+  filteredProperties: Property[];
+  filteredPersons: Person[];
+
+  // UI State
+  selectedProperty: Property | null;
+  selectedPerson: Person | null;
+  isPropertyDetailOpen: boolean;
+  isPersonDetailOpen: boolean;
+  isSidebarOpen: boolean;
+  isMobileView: boolean;
+  isFilterDrawerOpen: boolean;
+  showPropertyForm: boolean;
+  showPersonForm: boolean;
+  editingProperty: Property | null;
+  editingPerson: Person | null;
+  activeTab: "properties" | "persons";
+  isLiveView: boolean;
+
+  // Map state
+  mapViewport: MapViewport;
+
+  // Filters
+  filters: FilterState;
+  personFilters: PersonFilterState;
+
+  // Loading states
+  loadingStates: LoadingStates;
+  isLoading: boolean;
+  error: string | null;
+
+  // Cache state
+  isLoadingFromCache: boolean;
+  lastSyncTime: number;
+
+  // Data loading flags to prevent duplicate requests
+  dataLoadingPromises: {
+    properties: Promise<void> | null;
+    persons: Promise<void> | null;
+    connections: Promise<void> | null;
+    links: Promise<void> | null;
+    allData: Promise<void> | null;
+    propertyDetails: Map<number, Promise<void>>;
+    personDetails: Map<number, Promise<void>>;
+  };
+
+  // Actions
+  setProperties: (properties: Property[]) => void;
+  setPersons: (persons: Person[]) => void;
+  setConnections: (connections: Connection[]) => void;
+  setLinks: (links: Link[]) => void;
+  setFilteredProperties: (properties: Property[]) => void;
+  setSelectedProperty: (property: Property | null) => void;
+  setSelectedPerson: (person: Person | null) => void;
+  setMapViewport: (viewport: Partial<MapViewport>) => void;
+  setMobileView: (isMobile: boolean) => void;
+  setActiveTab: (tab: "properties" | "persons") => void;
+  setIsLiveView: (isLive: boolean) => void;
+
+  // UI Actions
+  toggleSidebar: () => void;
+  togglePropertyDetail: (open?: boolean) => void;
+  togglePersonDetail: (open?: boolean) => void;
+  toggleFilterDrawer: () => void;
+  togglePropertyForm: (property?: Property) => void;
+  togglePersonForm: (person?: Person) => void;
+
+  // Filter Actions
+  updateFilters: (newFilters: Partial<FilterState>) => void;
+  resetFilters: () => void;
+  updatePersonFilters: (newFilters: Partial<PersonFilterState>) => void;
+  resetPersonFilters: () => void;
+
+  // Data Actions
+  loadFromCache: () => void;
+  loadProperties: () => Promise<void>;
+  loadPersons: () => Promise<void>;
+  loadConnections: () => Promise<void>;
+  loadLinks: () => Promise<void>;
+  loadAllData: () => Promise<void>;
+  loadPropertyDetails: (id: number) => Promise<void>;
+  loadPersonDetails: (id: number) => Promise<void>;
+  refreshData: () => Promise<void>;
+
+  createProperty: (property: Omit<Property, "id">) => Promise<void>;
+  updateProperty: (property: Property) => Promise<void>;
+  deleteProperty: (id: number) => Promise<void>;
+
+  createPerson: (person: Omit<Person, "id">) => Promise<void>;
+  updatePerson: (person: Person) => Promise<void>;
+  deletePerson: (id: number) => Promise<void>;
+
+  createConnection: (connection: Omit<Connection, "id">) => Promise<void>;
+  deleteConnection: (id: number) => Promise<void>;
+
+  createLink: (link: Omit<Link, "id">) => Promise<void>;
+  updateLink: (link: Link) => Promise<void>;
+  deleteLink: (id: number) => Promise<void>;
+
+  // Helper functions
+  getPropertyPersons: (propertyId: number) => Person[];
+  getPropertyLinks: (propertyId: number) => Link[];
+  getPersonProperties: (personId: number) => Property[];
+  getPersonConnections: (personId: number) => Connection[];
+  getAllTags: () => string[];
+  applyFilters: () => void;
+  applyPersonFilters: () => void;
+}
+
+const initialFilters: FilterState = {
+  priceRanges: [],
+  sizeRanges: [],
+  propertyTypes: [],
+  searchQuery: "",
+  tags: [],
+  excludedTags: [],
+  rating: undefined,
+  sortBy: "newest",
+  hasLocation: null,
+  radiusRange: [0, 50000],
+  zone: undefined,
+  area: undefined,
+};
+
+const initialPersonFilters: PersonFilterState = {
+  searchQuery: "",
+  roles: [],
+  hasProperties: null,
+};
+
+const initialMapViewport: MapViewport = {
+  latitude: DEFAULT_COORDINATES.latitude,
+  longitude: DEFAULT_COORDINATES.longitude,
+  zoom: 12,
+};
+
+const initialLoadingStates: LoadingStates = {
+  properties: false,
+  persons: false,
+  connections: false,
+  links: false,
+  creating: false,
+  updating: false,
+  deleting: false,
+};
+
+export const useStore = create<Store>((set, get) => ({
+  // Initial state - Live View set to false by default
+  properties: [],
+  persons: [],
+  connections: [],
+  links: [],
+  filteredProperties: [],
+  filteredPersons: [],
+  selectedProperty: null,
+  selectedPerson: null,
+  isPropertyDetailOpen: false,
+  isPersonDetailOpen: false,
+  isSidebarOpen: true,
+  isMobileView: false,
+  isFilterDrawerOpen: false,
+  showPropertyForm: false,
+  showPersonForm: false,
+  editingProperty: null,
+  editingPerson: null,
+  activeTab: "properties",
+  isLiveView: false,
+  mapViewport: storage.getMapViewport() || initialMapViewport,
+  // Load filters from localStorage or use defaults
+  filters: storage.get(STORAGE_KEYS.FILTERS) || initialFilters,
+  personFilters:
+    storage.get(STORAGE_KEYS.PERSON_FILTERS) || initialPersonFilters,
+  loadingStates: initialLoadingStates,
+  isLoading: false,
+  error: null,
+  isLoadingFromCache: false,
+  lastSyncTime: 0,
+  dataLoadingPromises: {
+    properties: null,
+    persons: null,
+    connections: null,
+    links: null,
+    allData: null,
+    propertyDetails: new Map(),
+    personDetails: new Map(),
+  },
+
+  // Load data from cache immediately
+  loadFromCache: () => {
+    console.log("Loading data from cache...");
+    set({ isLoadingFromCache: true });
+
+    const cachedProperties = storage.get(STORAGE_KEYS.PROPERTIES);
+    const cachedPersons = storage.get(STORAGE_KEYS.PERSONS);
+    const cachedConnections = storage.get(STORAGE_KEYS.CONNECTIONS);
+    const cachedLinks = storage.get(STORAGE_KEYS.LINKS);
+    const lastSync = storage.getLastSync();
+
+    if (cachedProperties || cachedPersons || cachedConnections || cachedLinks) {
+      console.log("Found cached data:", {
+        properties: cachedProperties?.length || 0,
+        persons: cachedPersons?.length || 0,
+        connections: cachedConnections?.length || 0,
+        links: cachedLinks?.length || 0,
+        lastSync: new Date(lastSync).toLocaleString(),
       });
-      setFilteredProperties(propertiesInView);
-    }
-  }, [isLiveView, mapViewport.bounds, properties, setFilteredProperties, filteredProperties]);
 
-  // Filter properties to only include those with valid locations
-  const validProperties = useMemo(() => {
-    return filteredProperties.filter((property) => {
-      const location = ensureValidLocation(property.location);
-      // Only include properties where location is not the backup (meaning they have real coordinates)
-      return (
-        location.latitude !== DEFAULT_COORDINATES.latitude ||
-        location.longitude !== DEFAULT_COORDINATES.longitude ||
-        (property.location &&
-          typeof property.location.latitude === 'number' &&
-          typeof property.location.longitude === 'number' &&
-          !isNaN(property.location.latitude) &&
-          !isNaN(property.location.longitude))
+      // Validate cached properties
+      const validatedProperties = (cachedProperties || []).map(
+        (property: Property) => ({
+          ...property,
+          location: ensureValidLocation(property.location),
+        })
       );
+
+      set({
+        properties: validatedProperties,
+        persons: cachedPersons || [],
+        connections: cachedConnections || [],
+        links: cachedLinks || [],
+        lastSyncTime: lastSync,
+        isLoadingFromCache: false,
+      });
+
+      // Apply filters to cached data
+      get().applyFilters();
+      get().applyPersonFilters();
+    } else {
+      console.log("No cached data found");
+      set({ isLoadingFromCache: false });
+    }
+  },
+
+  // Setters with cache updates and improved filtering
+  setProperties: (properties) => {
+    console.log("Setting properties:", properties.length);
+    set({ properties });
+    storage.set(STORAGE_KEYS.PROPERTIES, properties);
+
+    // Apply filters immediately after setting properties
+    setTimeout(() => {
+      get().applyFilters();
+    }, 0);
+  },
+
+  setPersons: (persons) => {
+    console.log("Setting persons:", persons.length);
+    set({ persons });
+    storage.set(STORAGE_KEYS.PERSONS, persons);
+
+    // Apply person filters immediately after setting persons
+    setTimeout(() => {
+      console.log("Applying person filters after setting persons...");
+      get().applyPersonFilters();
+    }, 0);
+  },
+
+  setConnections: (connections) => {
+    set({ connections });
+    storage.set(STORAGE_KEYS.CONNECTIONS, connections);
+  },
+
+  setLinks: (links) => {
+    set({ links });
+    storage.set(STORAGE_KEYS.LINKS, links);
+  },
+
+  setFilteredProperties: (filteredProperties) => set({ filteredProperties }),
+
+  setSelectedProperty: (property) => set({ selectedProperty: property }),
+  setSelectedPerson: (person) => set({ selectedPerson: person }),
+
+  setMapViewport: (viewport) => {
+    const currentViewport = get().mapViewport;
+
+    if (viewport.bounds) {
+      let boundsObj;
+      if (typeof viewport.bounds.getNorth === "function") {
+        boundsObj = {
+          north: viewport.bounds.getNorth(),
+          south: viewport.bounds.getSouth(),
+          east: viewport.bounds.getEast(),
+          west: viewport.bounds.getWest(),
+        };
+      } else {
+        boundsObj = viewport.bounds;
+      }
+
+      const newViewport = {
+        ...currentViewport,
+        ...viewport,
+        bounds: boundsObj,
+      };
+
+      set({ mapViewport: newViewport });
+      storage.setMapViewport(newViewport);
+    } else {
+      const { bounds, ...viewportWithoutBounds } = viewport;
+      const newViewport = {
+        ...currentViewport,
+        ...viewportWithoutBounds,
+      };
+
+      set({ mapViewport: newViewport });
+      storage.setMapViewport(newViewport);
+    }
+  },
+
+  setMobileView: (isMobile) => set({ isMobileView: isMobile }),
+  setActiveTab: (tab) => set({ activeTab: tab }),
+  setIsLiveView: (isLive) => set({ isLiveView: isLive }),
+
+  // UI Actions
+  toggleSidebar: () =>
+    set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
+
+  togglePropertyDetail: (open) =>
+    set((state) => ({
+      isPropertyDetailOpen:
+        open !== undefined ? open : !state.isPropertyDetailOpen,
+    })),
+
+  togglePersonDetail: (open) =>
+    set((state) => ({
+      isPersonDetailOpen: open !== undefined ? open : !state.isPersonDetailOpen,
+    })),
+
+  toggleFilterDrawer: () =>
+    set((state) => ({ isFilterDrawerOpen: !state.isFilterDrawerOpen })),
+
+  togglePropertyForm: (property) =>
+    set((state) => ({
+      showPropertyForm: !state.showPropertyForm,
+      editingProperty: property || null,
+    })),
+
+  togglePersonForm: (person) =>
+    set((state) => ({
+      showPersonForm: !state.showPersonForm,
+      editingPerson: person || null,
+    })),
+
+  // Filter Actions - Updated to persist filters
+  updateFilters: (newFilters) => {
+    const updatedFilters = { ...get().filters, ...newFilters };
+    set({ filters: updatedFilters });
+
+    // Save filters to localStorage
+    storage.set(STORAGE_KEYS.FILTERS, updatedFilters);
+
+    // Apply filters
+    get().applyFilters();
+  },
+
+  resetFilters: () => {
+    set({ filters: initialFilters });
+
+    // Clear filters from localStorage
+    localStorage.removeItem(STORAGE_KEYS.FILTERS);
+
+    get().applyFilters();
+  },
+
+  updatePersonFilters: (newFilters) => {
+    console.log("Updating person filters:", newFilters);
+    const updatedFilters = { ...get().personFilters, ...newFilters };
+    set({ personFilters: updatedFilters });
+
+    // Save person filters to localStorage
+    storage.set(STORAGE_KEYS.PERSON_FILTERS, updatedFilters);
+
+    get().applyPersonFilters();
+  },
+
+  resetPersonFilters: () => {
+    console.log("Resetting person filters");
+    set({ personFilters: initialPersonFilters });
+
+    // Clear person filters from localStorage
+    localStorage.removeItem(STORAGE_KEYS.PERSON_FILTERS);
+
+    get().applyPersonFilters();
+  },
+
+  // Refresh data from API
+  refreshData: async () => {
+    console.log("Refreshing data from API...");
+
+    // Clear existing promises to force fresh requests
+    set({
+      dataLoadingPromises: {
+        properties: null,
+        persons: null,
+        connections: null,
+        links: null,
+        allData: null,
+        propertyDetails: new Map(),
+        personDetails: new Map(),
+      },
     });
-  }, [filteredProperties]);
 
-  const onMapLoad = useCallback(
-    (event: any) => {
-      console.log('Map loaded, setting initial bounds from map.getBounds()');
-      
-      const map = event.target;
+    // Clear detail caches when refreshing
+    storage.clearDetailsCaches();
 
-      // Ensure map is properly loaded before getting bounds
-      if (map && typeof map.getBounds === 'function') {
-        try {
-          const bounds = map.getBounds();
+    try {
+      await get().loadAllData();
+      storage.setLastSync();
+      set({ lastSyncTime: Date.now() });
+      console.log("Data refresh completed");
+    } catch (error) {
+      console.error("Failed to refresh data:", error);
+    }
+  },
 
-          if (bounds && typeof bounds.getNorth === 'function') {
-            // Use the store's bounds converter to ensure proper format
-            setMapViewport({
-              ...mapViewport,
-              bounds: bounds, // Let the store handle the conversion
-            });
-          }
-        } catch (error) {
-          console.warn('Error getting map bounds on load:', error);
-        }
+  // Data loading actions with deduplication and caching
+  loadProperties: async () => {
+    const state = get();
+
+    if (state.dataLoadingPromises.properties) {
+      console.log("Properties already loading, returning existing promise");
+      return state.dataLoadingPromises.properties;
+    }
+
+    if (state.properties.length > 0 && !state.loadingStates.properties) {
+      console.log("Properties already loaded, skipping");
+      return Promise.resolve();
+    }
+
+    console.log("Starting properties load...");
+
+    const loadPromise = (async () => {
+      set((state) => ({
+        loadingStates: { ...state.loadingStates, properties: true },
+        isLoading: true,
+        error: null,
+      }));
+
+      try {
+        const properties = await propertyAPI.getAll();
+        console.log("Loaded properties:", properties.length);
+
+        const validatedProperties = properties.map((property) => ({
+          ...property,
+          location: ensureValidLocation(property.location),
+        }));
+
+        get().setProperties(validatedProperties);
+      } catch (error) {
+        console.error("Failed to load properties:", error);
+        set({ error: "Failed to load properties" });
+      } finally {
+        set((state) => ({
+          loadingStates: { ...state.loadingStates, properties: false },
+          isLoading: false,
+          dataLoadingPromises: {
+            ...state.dataLoadingPromises,
+            properties: null,
+          },
+        }));
       }
-    },
-    [setMapViewport]
-  );
+    })();
 
-  const onMapMove = useCallback(
-    ({ viewState, target }: any) => {
-      let bounds;
+    set((state) => ({
+      dataLoadingPromises: {
+        ...state.dataLoadingPromises,
+        properties: loadPromise,
+      },
+    }));
 
-      // Get bounds from the map instance with error handling
-      if (target && typeof target.getBounds === 'function') {
-        try {
-          const mapBounds = target.getBounds();
-          if (mapBounds && typeof mapBounds.getNorth === 'function') {
-            bounds = mapBounds; // Pass the MapLibre bounds object directly
-          }
-        } catch (error) {
-          console.warn('Error getting map bounds on move:', error);
-        }
+    return loadPromise;
+  },
+
+  loadPersons: async () => {
+    const state = get();
+
+    if (state.dataLoadingPromises.persons) {
+      console.log("Persons already loading, returning existing promise");
+      return state.dataLoadingPromises.persons;
+    }
+
+    if (state.persons.length > 10 && !state.loadingStates.persons) {
+      console.log("Persons already loaded, skipping");
+      return Promise.resolve();
+    }
+
+    console.log("Starting persons load...");
+
+    const loadPromise = (async () => {
+      set((state) => ({
+        loadingStates: { ...state.loadingStates, persons: true },
+        isLoading: true,
+        error: null,
+      }));
+
+      try {
+        const persons = await personAPI.getAll();
+        console.log("Loaded persons from API:", persons.length);
+        get().setPersons(persons);
+      } catch (error) {
+        console.error("Failed to load persons:", error);
+        set({ error: "Failed to load persons" });
+      } finally {
+        set((state) => ({
+          loadingStates: { ...state.loadingStates, persons: false },
+          isLoading: false,
+          dataLoadingPromises: { ...state.dataLoadingPromises, persons: null },
+        }));
       }
+    })();
 
-      // Validate viewState before setting
-      if (
-        viewState &&
-        !isNaN(viewState.latitude) &&
-        !isNaN(viewState.longitude) &&
-        !isNaN(viewState.zoom) &&
-        typeof viewState.latitude === 'number' &&
-        typeof viewState.longitude === 'number' &&
-        typeof viewState.zoom === 'number'
-      ) {
-        setMapViewport({
-          latitude: viewState.latitude,
-          longitude: viewState.longitude,
-          zoom: viewState.zoom,
-          bounds,
+    set((state) => ({
+      dataLoadingPromises: {
+        ...state.dataLoadingPromises,
+        persons: loadPromise,
+      },
+    }));
+
+    return loadPromise;
+  },
+
+  loadConnections: async () => {
+    const state = get();
+
+    if (state.dataLoadingPromises.connections) {
+      console.log("Connections already loading, returning existing promise");
+      return state.dataLoadingPromises.connections;
+    }
+
+    if (state.connections.length > 0 && !state.loadingStates.connections) {
+      console.log("Connections already loaded, skipping");
+      return Promise.resolve();
+    }
+
+    console.log("Starting connections load...");
+
+    const loadPromise = (async () => {
+      set((state) => ({
+        loadingStates: { ...state.loadingStates, connections: true },
+      }));
+
+      try {
+        const connections = await connectionAPI.getAll();
+        console.log("Loaded connections:", connections.length);
+        get().setConnections(connections);
+      } catch (error) {
+        console.error("Failed to load connections:", error);
+        set({ error: "Failed to load connections" });
+      } finally {
+        set((state) => ({
+          loadingStates: { ...state.loadingStates, connections: false },
+          dataLoadingPromises: {
+            ...state.dataLoadingPromises,
+            connections: null,
+          },
+        }));
+      }
+    })();
+
+    set((state) => ({
+      dataLoadingPromises: {
+        ...state.dataLoadingPromises,
+        connections: loadPromise,
+      },
+    }));
+
+    return loadPromise;
+  },
+
+  loadLinks: async () => {
+    const state = get();
+
+    if (state.dataLoadingPromises.links) {
+      console.log("Links already loading, returning existing promise");
+      return state.dataLoadingPromises.links;
+    }
+
+    if (state.links.length > 0 && !state.loadingStates.links) {
+      console.log("Links already loaded, skipping");
+      return Promise.resolve();
+    }
+
+    console.log("Starting links load...");
+
+    const loadPromise = (async () => {
+      set((state) => ({
+        loadingStates: { ...state.loadingStates, links: true },
+      }));
+
+      try {
+        const links = await linkAPI.getAll();
+        console.log("Loaded links:", links.length);
+        get().setLinks(links);
+      } catch (error) {
+        console.error("Failed to load links:", error);
+        set({ error: "Failed to load links" });
+      } finally {
+        set((state) => ({
+          loadingStates: { ...state.loadingStates, links: false },
+          dataLoadingPromises: { ...state.dataLoadingPromises, links: null },
+        }));
+      }
+    })();
+
+    set((state) => ({
+      dataLoadingPromises: { ...state.dataLoadingPromises, links: loadPromise },
+    }));
+
+    return loadPromise;
+  },
+
+  loadAllData: async () => {
+    const state = get();
+
+    if (state.dataLoadingPromises.allData) {
+      console.log("All data already loading, returning existing promise");
+      return state.dataLoadingPromises.allData;
+    }
+
+    console.log("Loading all data from API...");
+
+    const loadPromise = (async () => {
+      set({ isLoading: true, error: null });
+
+      try {
+        const { properties, persons, connections, links } =
+          await extractAllDataFromProperties();
+
+        console.log("Loaded all data:", {
+          properties: properties.length,
+          persons: persons.length,
+          connections: connections.length,
+          links: links.length,
+        });
+
+        const validatedProperties = properties.map((property) => ({
+          ...property,
+          location: ensureValidLocation(property.location),
+        }));
+
+        // Update all data at once
+        get().setProperties(validatedProperties);
+        get().setPersons(persons);
+        get().setConnections(connections);
+        get().setLinks(links);
+
+        console.log("All data loaded successfully");
+      } catch (error) {
+        console.error("Failed to load all data:", error);
+        set({ error: "Failed to load data" });
+      } finally {
+        set((state) => ({
+          isLoading: false,
+          dataLoadingPromises: { ...state.dataLoadingPromises, allData: null },
+        }));
+      }
+    })();
+
+    set((state) => ({
+      dataLoadingPromises: {
+        ...state.dataLoadingPromises,
+        allData: loadPromise,
+      },
+    }));
+
+    return loadPromise;
+  },
+
+  // Load detailed data for a specific property with caching
+  loadPropertyDetails: async (id: number) => {
+    const state = get();
+
+    // Check if already loading
+    if (state.dataLoadingPromises.propertyDetails.has(id)) {
+      console.log(
+        `Property ${id} details already loading, returning existing promise`
+      );
+      return state.dataLoadingPromises.propertyDetails.get(id)!;
+    }
+
+    // Check cache first
+    const cachedDetails = storage.getPropertyDetails(id);
+    if (cachedDetails) {
+      console.log(`Property ${id} details found in cache`);
+
+      // Update the property in the store with cached data
+      const validatedProperty = {
+        ...cachedDetails.property,
+        location: ensureValidLocation(cachedDetails.property.location),
+      };
+
+      set((state) => {
+        const updatedProperties = state.properties.map((p) =>
+          p.id === id ? validatedProperty : p
+        );
+
+        // Merge cached persons, connections, and links
+        const existingPersonIds = new Set(state.persons.map((p) => p.id));
+        const newPersons = cachedDetails.persons.filter(
+          (p: Person) => !existingPersonIds.has(p.id)
+        );
+
+        const updatedPersons = [...state.persons, ...newPersons];
+        const updatedConnections = [
+          ...state.connections.filter((c) => c.property_id !== id),
+          ...cachedDetails.connections,
+        ];
+        const updatedLinks = [
+          ...state.links.filter((l) => l.property_id !== id),
+          ...cachedDetails.links,
+        ];
+
+        return {
+          properties: updatedProperties,
+          persons: updatedPersons,
+          connections: updatedConnections,
+          links: updatedLinks,
+          selectedProperty: validatedProperty,
+        };
+      });
+
+      get().applyFilters();
+      get().applyPersonFilters();
+      return Promise.resolve();
+    }
+
+    console.log(`Loading property ${id} details from API...`);
+
+    const loadPromise = (async () => {
+      try {
+        const { property, persons, connections, links } =
+          await propertyAPI.getById(id);
+
+        // Cache the details
+        storage.setPropertyDetails(id, {
+          property,
+          persons,
+          connections,
+          links,
+        });
+
+        // Update the property in the store with validated location
+        const validatedProperty = {
+          ...property,
+          location: ensureValidLocation(property.location),
+        };
+
+        set((state) => {
+          const updatedProperties = state.properties.map((p) =>
+            p.id === id ? validatedProperty : p
+          );
+
+          // Merge new persons, connections, and links
+          const existingPersonIds = new Set(state.persons.map((p) => p.id));
+          const newPersons = persons.filter(
+            (p) => !existingPersonIds.has(p.id)
+          );
+
+          const updatedPersons = [...state.persons, ...newPersons];
+          const updatedConnections = [
+            ...state.connections.filter((c) => c.property_id !== id),
+            ...connections,
+          ];
+          const updatedLinks = [
+            ...state.links.filter((l) => l.property_id !== id),
+            ...links,
+          ];
+
+          // Update cache
+          storage.set(STORAGE_KEYS.PROPERTIES, updatedProperties);
+          storage.set(STORAGE_KEYS.PERSONS, updatedPersons);
+          storage.set(STORAGE_KEYS.CONNECTIONS, updatedConnections);
+          storage.set(STORAGE_KEYS.LINKS, updatedLinks);
+
+          return {
+            properties: updatedProperties,
+            persons: updatedPersons,
+            connections: updatedConnections,
+            links: updatedLinks,
+            selectedProperty: validatedProperty,
+          };
+        });
+
+        get().applyFilters();
+        get().applyPersonFilters();
+
+        console.log(`Property ${id} details loaded and cached successfully`);
+      } catch (error) {
+        console.error("Failed to load property details:", error);
+        throw error;
+      } finally {
+        // Remove from loading promises
+        set((state) => {
+          const newMap = new Map(state.dataLoadingPromises.propertyDetails);
+          newMap.delete(id);
+          return {
+            dataLoadingPromises: {
+              ...state.dataLoadingPromises,
+              propertyDetails: newMap,
+            },
+          };
         });
       }
-    },
-    [setMapViewport]
-  );
+    })();
 
-  // Save viewport to localStorage whenever it changes
-  useEffect(() => {
-    if (
-      mapViewport && 
-      typeof mapViewport.latitude === 'number' && 
-      typeof mapViewport.longitude === 'number' && 
-      typeof mapViewport.zoom === 'number' &&
-      !isNaN(mapViewport.latitude) && 
-      !isNaN(mapViewport.longitude) && 
-      !isNaN(mapViewport.zoom)
-    ) {
-      const viewportToSave = {
-        latitude: mapViewport.latitude,
-        longitude: mapViewport.longitude,
-        zoom: mapViewport.zoom
+    // Add to loading promises
+    set((state) => {
+      const newMap = new Map(state.dataLoadingPromises.propertyDetails);
+      newMap.set(id, loadPromise);
+      return {
+        dataLoadingPromises: {
+          ...state.dataLoadingPromises,
+          propertyDetails: newMap,
+        },
       };
-      
-      localStorage.setItem('mapViewport', JSON.stringify(viewportToSave));
-      console.log('Saved map viewport to localStorage:', viewportToSave);
+    });
+
+    return loadPromise;
+  },
+
+  // Load detailed data for a specific person with caching
+  loadPersonDetails: async (id: number) => {
+    const state = get();
+
+    // Check if already loading
+    if (state.dataLoadingPromises.personDetails.has(id)) {
+      console.log(
+        `Person ${id} details already loading, returning existing promise`
+      );
+      return state.dataLoadingPromises.personDetails.get(id)!;
     }
-  }, [mapViewport.latitude, mapViewport.longitude, mapViewport.zoom]);
 
-  const handleMapClick = useCallback(
-    (event: any) => {
-      // Enhanced validation for map click events
-      if (!event || !event.originalEvent) {
-        return;
-      }
+    // Check cache first
+    const cachedDetails = storage.getPersonDetails(id);
+    if (cachedDetails) {
+      console.log(`Person ${id} details found in cache`);
 
-      // Only handle direct map clicks, not marker clicks
-      if (
-        event.originalEvent.target &&
-        (event.originalEvent.target.closest('.maplibregl-marker') ||
-          event.originalEvent.target.closest('button'))
-      ) {
-        return;
-      }
+      // Update the person in the store with cached data
+      set((state) => {
+        const updatedPersons = state.persons.map((p) =>
+          p.id === id ? cachedDetails.person : p
+        );
 
-      setPopupInfo(null);
-      setSelectedProperty(null);
-      togglePropertyDetail(false);
-    },
-    [setSelectedProperty, togglePropertyDetail]
-  );
+        // Merge cached properties, connections, and links
+        const existingPropertyIds = new Set(state.properties.map((p) => p.id));
+        const newProperties = cachedDetails.properties
+          .filter((p: Property) => !existingPropertyIds.has(p.id))
+          .map((property: Property) => ({
+            ...property,
+            location: ensureValidLocation(property.location),
+          }));
 
-  const handleGPSLocation = (event: React.MouseEvent) => {
-    event.stopPropagation();
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
+        const updatedProperties = [...state.properties, ...newProperties];
+        const updatedConnections = [
+          ...state.connections.filter((c) => c.person_id !== id),
+          ...cachedDetails.connections,
+        ];
+        const updatedLinks = [
+          ...state.links,
+          ...cachedDetails.links.filter(
+            (l: Link) => !state.links.some((existing) => existing.id === l.id)
+          ),
+        ];
 
-          // Validate GPS coordinates
-          if (!isNaN(latitude) && !isNaN(longitude)) {
-            setUserLocation({ latitude, longitude });
-            setMapViewport({
-              latitude,
-              longitude,
-              zoom: 16,
-            });
-          }
-        },
-        (error) => {
-          console.error('Error getting location:', error);
-          alert(
-            'Unable to get your location. Please check your GPS settings and try again.'
+        return {
+          persons: updatedPersons,
+          properties: updatedProperties,
+          connections: updatedConnections,
+          links: updatedLinks,
+          selectedPerson: cachedDetails.person,
+        };
+      });
+
+      get().applyFilters();
+      get().applyPersonFilters();
+      return Promise.resolve();
+    }
+
+    console.log(`Loading person ${id} details from API...`);
+
+    const loadPromise = (async () => {
+      try {
+        const { person, properties, connections, links } =
+          await personAPI.getById(id);
+
+        // Cache the details
+        storage.setPersonDetails(id, {
+          person,
+          properties,
+          connections,
+          links,
+        });
+
+        // Update the person in the store
+        set((state) => {
+          const updatedPersons = state.persons.map((p) =>
+            p.id === id ? person : p
           );
+
+          // Merge new properties, connections, and links
+          const existingPropertyIds = new Set(
+            state.properties.map((p) => p.id)
+          );
+          const newProperties = properties
+            .filter((p) => !existingPropertyIds.has(p.id))
+            .map((property) => ({
+              ...property,
+              location: ensureValidLocation(property.location),
+            }));
+
+          const updatedProperties = [...state.properties, ...newProperties];
+          const updatedConnections = [
+            ...state.connections.filter((c) => c.person_id !== id),
+            ...connections,
+          ];
+          const updatedLinks = [
+            ...state.links,
+            ...links.filter(
+              (l) => !state.links.some((existing) => existing.id === l.id)
+            ),
+          ];
+
+          // Update cache
+          storage.set(STORAGE_KEYS.PERSONS, updatedPersons);
+          storage.set(STORAGE_KEYS.PROPERTIES, updatedProperties);
+          storage.set(STORAGE_KEYS.CONNECTIONS, updatedConnections);
+          storage.set(STORAGE_KEYS.LINKS, updatedLinks);
+
+          return {
+            persons: updatedPersons,
+            properties: updatedProperties,
+            connections: updatedConnections,
+            links: updatedLinks,
+            selectedPerson: person,
+          };
+        });
+
+        get().applyFilters();
+        get().applyPersonFilters();
+
+        console.log(`Person ${id} details loaded and cached successfully`);
+      } catch (error) {
+        console.error("Failed to load person details:", error);
+        throw error;
+      } finally {
+        // Remove from loading promises
+        set((state) => {
+          const newMap = new Map(state.dataLoadingPromises.personDetails);
+          newMap.delete(id);
+          return {
+            dataLoadingPromises: {
+              ...state.dataLoadingPromises,
+              personDetails: newMap,
+            },
+          };
+        });
+      }
+    })();
+
+    // Add to loading promises
+    set((state) => {
+      const newMap = new Map(state.dataLoadingPromises.personDetails);
+      newMap.set(id, loadPromise);
+      return {
+        dataLoadingPromises: {
+          ...state.dataLoadingPromises,
+          personDetails: newMap,
         },
-        {
-          enableHighAccuracy: true,
-          timeout: 15000,
-          maximumAge: 0,
-        }
+      };
+    });
+
+    return loadPromise;
+  },
+
+  // Property CRUD with immediate state updates
+  createProperty: async (propertyData) => {
+    set((state) => ({
+      loadingStates: { ...state.loadingStates, creating: true },
+    }));
+
+    try {
+      const result = await propertyAPI.create(propertyData);
+      if (result.success) {
+        // Optimistically add the new property to the state
+        const newProperty = {
+          ...propertyData,
+          id: result.id,
+          location: ensureValidLocation(propertyData.location),
+        } as Property;
+
+        set((state) => {
+          const updatedProperties = [...state.properties, newProperty];
+          storage.set(STORAGE_KEYS.PROPERTIES, updatedProperties);
+          return { properties: updatedProperties };
+        });
+
+        get().applyFilters();
+
+        // Refresh data in background to ensure consistency
+        setTimeout(() => get().refreshData(), 1000);
+      }
+    } catch (error) {
+      console.error("Failed to create property:", error);
+      throw error;
+    } finally {
+      set((state) => ({
+        loadingStates: { ...state.loadingStates, creating: false },
+      }));
+    }
+  },
+
+  updateProperty: async (property) => {
+    set((state) => ({
+      loadingStates: { ...state.loadingStates, updating: true },
+    }));
+
+    try {
+      const result = await propertyAPI.update(property);
+      if (result.success) {
+        set((state) => {
+          const updatedProperties = state.properties.map((p) =>
+            p.id === property.id ? property : p
+          );
+
+          storage.set(STORAGE_KEYS.PROPERTIES, updatedProperties);
+
+          return {
+            properties: updatedProperties,
+            selectedProperty:
+              state.selectedProperty?.id === property.id
+                ? property
+                : state.selectedProperty,
+          };
+        });
+        get().applyFilters();
+      }
+    } catch (error) {
+      console.error("Failed to update property:", error);
+      throw error;
+    } finally {
+      set((state) => ({
+        loadingStates: { ...state.loadingStates, updating: false },
+      }));
+    }
+  },
+
+  deleteProperty: async (id) => {
+    set((state) => ({
+      loadingStates: { ...state.loadingStates, deleting: true },
+    }));
+
+    try {
+      await connectionAPI.deleteByPropertyId(id);
+      await linkAPI.deleteByPropertyId(id);
+
+      const result = await propertyAPI.delete(id);
+      if (result.success) {
+        set((state) => {
+          const updatedProperties = state.properties.filter((p) => p.id !== id);
+          const updatedConnections = state.connections.filter(
+            (c) => c.property_id !== id
+          );
+          const updatedLinks = state.links.filter((l) => l.property_id !== id);
+
+          // Update cache
+          storage.set(STORAGE_KEYS.PROPERTIES, updatedProperties);
+          storage.set(STORAGE_KEYS.CONNECTIONS, updatedConnections);
+          storage.set(STORAGE_KEYS.LINKS, updatedLinks);
+
+          return {
+            properties: updatedProperties,
+            connections: updatedConnections,
+            links: updatedLinks,
+            selectedProperty:
+              state.selectedProperty?.id === id ? null : state.selectedProperty,
+            isPropertyDetailOpen:
+              state.selectedProperty?.id === id
+                ? false
+                : state.isPropertyDetailOpen,
+          };
+        });
+        get().applyFilters();
+      }
+    } catch (error) {
+      console.error("Failed to delete property:", error);
+      throw error;
+    } finally {
+      set((state) => ({
+        loadingStates: { ...state.loadingStates, deleting: false },
+      }));
+    }
+  },
+
+  // Person CRUD with immediate state updates
+  createPerson: async (personData) => {
+    set((state) => ({
+      loadingStates: { ...state.loadingStates, creating: true },
+    }));
+
+    try {
+      const result = await personAPI.create(personData);
+      if (result.success) {
+        // Optimistically add the new person to the state
+        const newPerson = {
+          ...personData,
+          id: result.id,
+        } as Person;
+
+        set((state) => {
+          const updatedPersons = [...state.persons, newPerson];
+          storage.set(STORAGE_KEYS.PERSONS, updatedPersons);
+          return { persons: updatedPersons };
+        });
+
+        get().applyPersonFilters();
+
+        // Refresh data in background to ensure consistency
+        setTimeout(() => get().refreshData(), 1000);
+      }
+    } catch (error) {
+      console.error("Failed to create person:", error);
+      throw error;
+    } finally {
+      set((state) => ({
+        loadingStates: { ...state.loadingStates, creating: false },
+      }));
+    }
+  },
+
+  updatePerson: async (person) => {
+    set((state) => ({
+      loadingStates: { ...state.loadingStates, updating: true },
+    }));
+
+    try {
+      const result = await personAPI.update(person);
+      if (result.success) {
+        set((state) => {
+          const updatedPersons = state.persons.map((p) =>
+            p.id === person.id ? person : p
+          );
+          storage.set(STORAGE_KEYS.PERSONS, updatedPersons);
+
+          return {
+            persons: updatedPersons,
+            selectedPerson:
+              state.selectedPerson?.id === person.id
+                ? person
+                : state.selectedPerson,
+          };
+        });
+        get().applyPersonFilters();
+      }
+    } catch (error) {
+      console.error("Failed to update person:", error);
+      throw error;
+    } finally {
+      set((state) => ({
+        loadingStates: { ...state.loadingStates, updating: false },
+      }));
+    }
+  },
+
+  deletePerson: async (id) => {
+    set((state) => ({
+      loadingStates: { ...state.loadingStates, deleting: true },
+    }));
+
+    try {
+      await connectionAPI.deleteByPersonId(id);
+
+      const result = await personAPI.delete(id);
+      if (result.success) {
+        set((state) => {
+          const updatedPersons = state.persons.filter((p) => p.id !== id);
+          const updatedConnections = state.connections.filter(
+            (c) => c.person_id !== id
+          );
+
+          storage.set(STORAGE_KEYS.PERSONS, updatedPersons);
+          storage.set(STORAGE_KEYS.CONNECTIONS, updatedConnections);
+
+          return {
+            persons: updatedPersons,
+            connections: updatedConnections,
+            selectedPerson:
+              state.selectedPerson?.id === id ? null : state.selectedPerson,
+            isPersonDetailOpen:
+              state.selectedPerson?.id === id
+                ? false
+                : state.isPersonDetailOpen,
+          };
+        });
+        get().applyPersonFilters();
+      }
+    } catch (error) {
+      console.error("Failed to delete person:", error);
+      throw error;
+    } finally {
+      set((state) => ({
+        loadingStates: { ...state.loadingStates, deleting: false },
+      }));
+    }
+  },
+
+  // Connection CRUD with immediate state updates
+  createConnection: async (connectionData) => {
+    set((state) => ({
+      loadingStates: { ...state.loadingStates, creating: true },
+    }));
+
+    try {
+      const result = await connectionAPI.create(connectionData);
+      if (result.success) {
+        // Optimistically add the new connection to the state
+        const newConnection = {
+          ...connectionData,
+          id: result.id,
+        } as Connection;
+
+        set((state) => {
+          const updatedConnections = [...state.connections, newConnection];
+          storage.set(STORAGE_KEYS.CONNECTIONS, updatedConnections);
+          return { connections: updatedConnections };
+        });
+
+        // Refresh data in background to ensure consistency
+        setTimeout(() => get().refreshData(), 1000);
+      }
+    } catch (error) {
+      console.error("Failed to create connection:", error);
+      throw error;
+    } finally {
+      set((state) => ({
+        loadingStates: { ...state.loadingStates, creating: false },
+      }));
+    }
+  },
+
+  deleteConnection: async (id) => {
+    set((state) => ({
+      loadingStates: { ...state.loadingStates, deleting: true },
+    }));
+
+    try {
+      const result = await connectionAPI.delete(id);
+      if (result.success) {
+        set((state) => {
+          const updatedConnections = state.connections.filter(
+            (c) => c.id !== id
+          );
+          storage.set(STORAGE_KEYS.CONNECTIONS, updatedConnections);
+          return { connections: updatedConnections };
+        });
+      }
+    } catch (error) {
+      console.error("Failed to delete connection:", error);
+      throw error;
+    } finally {
+      set((state) => ({
+        loadingStates: { ...state.loadingStates, deleting: false },
+      }));
+    }
+  },
+
+  // Link CRUD with immediate state updates
+  createLink: async (linkData) => {
+    set((state) => ({
+      loadingStates: { ...state.loadingStates, creating: true },
+    }));
+
+    try {
+      const result = await linkAPI.create(linkData);
+      if (result.success) {
+        // Optimistically add the new link to the state
+        const newLink = {
+          ...linkData,
+          id: result.id,
+        } as Link;
+
+        set((state) => {
+          const updatedLinks = [...state.links, newLink];
+          storage.set(STORAGE_KEYS.LINKS, updatedLinks);
+          return { links: updatedLinks };
+        });
+
+        // Refresh data in background to ensure consistency
+        setTimeout(() => get().refreshData(), 1000);
+      }
+    } catch (error) {
+      console.error("Failed to create link:", error);
+      throw error;
+    } finally {
+      set((state) => ({
+        loadingStates: { ...state.loadingStates, creating: false },
+      }));
+    }
+  },
+
+  updateLink: async (link) => {
+    set((state) => ({
+      loadingStates: { ...state.loadingStates, updating: true },
+    }));
+
+    try {
+      const result = await linkAPI.update(link);
+      if (result.success) {
+        set((state) => {
+          const updatedLinks = state.links.map((l) =>
+            l.id === link.id ? link : l
+          );
+          storage.set(STORAGE_KEYS.LINKS, updatedLinks);
+          return { links: updatedLinks };
+        });
+      }
+    } catch (error) {
+      console.error("Failed to update link:", error);
+      throw error;
+    } finally {
+      set((state) => ({
+        loadingStates: { ...state.loadingStates, updating: false },
+      }));
+    }
+  },
+
+  deleteLink: async (id) => {
+    set((state) => ({
+      loadingStates: { ...state.loadingStates, deleting: true },
+    }));
+
+    try {
+      const result = await linkAPI.delete(id);
+      if (result.success) {
+        set((state) => {
+          const updatedLinks = state.links.filter((l) => l.id !== id);
+          storage.set(STORAGE_KEYS.LINKS, updatedLinks);
+          return { links: updatedLinks };
+        });
+      }
+    } catch (error) {
+      console.error("Failed to delete link:", error);
+      throw error;
+    } finally {
+      set((state) => ({
+        loadingStates: { ...state.loadingStates, deleting: false },
+      }));
+    }
+  },
+
+  // Helper functions
+  getPropertyPersons: (propertyId) => {
+    const state = get();
+    const propertyConnections = state.connections.filter(
+      (c) => c.property_id === propertyId
+    );
+    return propertyConnections
+      .map((connection) =>
+        state.persons.find((person) => person.id === connection.person_id)
+      )
+      .filter(Boolean) as Person[];
+  },
+
+  getPropertyLinks: (propertyId) => {
+    const state = get();
+    return state.links.filter((link) => link.property_id === propertyId);
+  },
+
+  getPersonProperties: (personId) => {
+    const state = get();
+    const personConnections = state.connections.filter(
+      (c) => c.person_id === personId
+    );
+    return personConnections
+      .map((connection) =>
+        state.properties.find(
+          (property) => property.id === connection.property_id
+        )
+      )
+      .filter(Boolean) as Property[];
+  },
+
+  getPersonConnections: (personId) => {
+    const state = get();
+    return state.connections.filter((c) => c.person_id === personId);
+  },
+
+  getAllTags: () => {
+    const state = get();
+    const allTags = state.properties.flatMap((property) => property.tags || []);
+    return Array.from(new Set(allTags)).sort();
+  },
+
+  // Enhanced filtering logic
+  applyFilters: () => {
+    const state = get();
+    const { properties, filters, connections, persons } = state;
+
+    let filtered = [...properties];
+
+    // Search query filter - Enhanced to search across multiple fields
+    if (filters.searchQuery && filters.searchQuery.trim()) {
+      const query = filters.searchQuery.toLowerCase().trim();
+      filtered = filtered.filter((property) => {
+        // Search in property fields
+        const propertyMatch =
+          property.area?.toLowerCase().includes(query) ||
+          property.zone?.toLowerCase().includes(query) ||
+          property.type?.toLowerCase().includes(query) ||
+          property.description?.toLowerCase().includes(query) ||
+          property.note?.toLowerCase().includes(query) ||
+          property.tags?.some((tag) => tag.toLowerCase().includes(query));
+
+        // Search in connected persons
+        const propertyConnections = connections.filter(
+          (c) => c.property_id === property.id
+        );
+        const connectedPersons = propertyConnections
+          .map((conn) => persons.find((person) => person.id === conn.person_id))
+          .filter(Boolean);
+
+        const personMatch = connectedPersons.some(
+          (person) =>
+            person?.name?.toLowerCase().includes(query) ||
+            person?.phone?.includes(query) ||
+            person?.alternative_contact_details?.includes(query) ||
+            person?.role?.toLowerCase().includes(query) ||
+            person?.about?.toLowerCase().includes(query)
+        );
+
+        // Search in connection details
+        const connectionMatch = propertyConnections.some(
+          (conn) =>
+            conn.role?.toLowerCase().includes(query) ||
+            conn.remark?.toLowerCase().includes(query)
+        );
+
+        return propertyMatch || personMatch || connectionMatch;
+      });
+    }
+
+    // Zone filter
+    if (filters.zone && filters.zone.trim()) {
+      filtered = filtered.filter((property) => property.zone === filters.zone);
+    }
+
+    // Area filter
+    if (filters.area && filters.area.trim()) {
+      const areaQuery = filters.area.toLowerCase().trim();
+      filtered = filtered.filter((property) =>
+        property.area?.toLowerCase().includes(areaQuery)
+      );
+    }
+
+    // Property type filter
+    if (filters.propertyTypes.length > 0) {
+      filtered = filtered.filter((property) =>
+        filters.propertyTypes.includes(property.type!)
+      );
+    }
+
+    // Price range filter - Multiple ranges support
+    if (filters.priceRanges.length > 0) {
+      filtered = filtered.filter((property) => {
+        return filters.priceRanges.some(([min, max]) => {
+          const propertyMin = property.price_min;
+          const propertyMax = property.price_max;
+
+          return propertyMin <= max && propertyMax >= min;
+        });
+      });
+    }
+
+    // Size range filter - Multiple ranges support
+    if (filters.sizeRanges.length > 0) {
+      filtered = filtered.filter((property) => {
+        return filters.sizeRanges.some(([min, max]) => {
+          const propertyMin = property.size_min;
+          const propertyMax = property.size_max;
+
+          return propertyMin <= max && propertyMax >= min;
+        });
+      });
+    }
+
+    // Rating filter
+    if (filters.rating !== undefined) {
+      filtered = filtered.filter(
+        (property) => property.rating >= filters.rating!
+      );
+    }
+
+    // Tags filter (include)
+    if (filters.tags.length > 0) {
+      filtered = filtered.filter((property) =>
+        filters.tags.some((tag) => property.tags.includes(tag))
+      );
+    }
+
+    // Excluded tags filter
+    if (filters.excludedTags.length > 0) {
+      filtered = filtered.filter(
+        (property) =>
+          !filters.excludedTags.some((tag) => property.tags.includes(tag))
+      );
+    }
+
+    // Location status filter
+    if (filters.hasLocation !== null) {
+      filtered = filtered.filter((property) => {
+        const hasValidLocation =
+          property.location.latitude !== DEFAULT_COORDINATES.latitude ||
+          property.location.longitude !== DEFAULT_COORDINATES.longitude;
+
+        return filters.hasLocation ? hasValidLocation : !hasValidLocation;
+      });
+    }
+
+    // Radius range filter
+    if (
+      filters.radiusRange &&
+      (filters.radiusRange[0] > 0 || filters.radiusRange[1] < 50000)
+    ) {
+      filtered = filtered.filter((property) => {
+        const radius = property.radius || 0;
+        return (
+          radius >= filters.radiusRange[0] && radius <= filters.radiusRange[1]
+        );
+      });
+    }
+
+    // Sorting
+    filtered.sort((a, b) => {
+      switch (filters.sortBy) {
+        case "price_asc":
+          return a.price_min - b.price_min;
+        case "price_desc":
+          return b.price_min - a.price_min;
+        case "size_asc":
+          return a.size_min - b.size_min;
+        case "size_desc":
+          return b.size_min - a.size_min;
+        case "rating_desc":
+          return (b.rating || 0) - (a.rating || 0);
+        case "oldest":
+          return a.id - b.id;
+        case "newest":
+        default:
+          return b.id - a.id;
+      }
+    });
+
+    set({ filteredProperties: filtered });
+  },
+
+  applyPersonFilters: () => {
+    const state = get();
+    const { persons, personFilters, connections } = state;
+
+    console.log("Applying person filters:", {
+      totalPersons: persons.length,
+      filters: personFilters,
+      connections: connections.length,
+    });
+
+    let filtered = [...persons];
+
+    // Search query filter
+    if (personFilters.searchQuery && personFilters.searchQuery.trim()) {
+      const query = personFilters.searchQuery.toLowerCase().trim();
+      console.log("Applying search filter:", query);
+
+      filtered = filtered.filter(
+        (person) =>
+          person.name?.toLowerCase().includes(query) ||
+          person.phone?.includes(query) ||
+          person.alternative_contact_details?.includes(query) ||
+          person.role?.toLowerCase().includes(query) ||
+          person.about?.toLowerCase().includes(query)
       );
 
-      // Start watching position
-      if (!watchId) {
-        const id = navigator.geolocation.watchPosition(
-          (position) => {
-            const { latitude, longitude } = position.coords;
-            if (!isNaN(latitude) && !isNaN(longitude)) {
-              setUserLocation({ latitude, longitude });
-            }
-          },
-          (error) => {
-            console.error('Error watching position:', error);
-          },
-          {
-            enableHighAccuracy: true,
-            timeout: 15000,
-            maximumAge: 0,
-          }
+      console.log("After search filter:", filtered.length);
+    }
+
+    // Role filter
+    if (personFilters.roles.length > 0) {
+      console.log("Applying role filter:", personFilters.roles);
+
+      filtered = filtered.filter((person) =>
+        personFilters.roles.includes(person.role!)
+      );
+
+      console.log("After role filter:", filtered.length);
+    }
+
+    // Has properties filter
+    if (personFilters.hasProperties !== null) {
+      console.log(
+        "Applying hasProperties filter:",
+        personFilters.hasProperties
+      );
+
+      filtered = filtered.filter((person) => {
+        const hasProperties = connections.some(
+          (conn) => conn.person_id === person.id
         );
-        setWatchId(id);
-      }
-    } else {
-      alert('GPS is not supported in your browser');
-    }
-  };
+        return personFilters.hasProperties ? hasProperties : !hasProperties;
+      });
 
-  // Cleanup watch position
-  useEffect(() => {
-    return () => {
-      if (watchId) {
-        navigator.geolocation.clearWatch(watchId);
-      }
-    };
-  }, [watchId]);
-
-  const getMarkerColor = (property: Property): string => {
-    return PROPERTY_TYPE_COLORS[property.type] || '#6B7280';
-  };
-
-  const getMarkerIcon = (property: Property) => {
-    // Use the PROPERTY_TYPE_ICONS constant to get the correct icon name
-    const iconName = PROPERTY_TYPE_ICONS[property.type] || 'MapPin';
-
-    // Get the corresponding icon component
-    const IconComponent =
-      IconComponents[iconName as keyof typeof IconComponents] || MapPin;
-
-    return IconComponent;
-  };
-
-  const getMarkerSize = (): number => {
-    const zoom = mapViewport.zoom;
-
-    if (zoom < 10) return 24;
-    if (zoom < 12) return 28;
-    if (zoom < 14) return 32;
-    return 36;
-  };
-
-  const mapStyle = useMemo(
-    () => ({
-      version: 8,
-      sources: {
-        osm: {
-          type: 'raster',
-          tiles: [
-            isSatelliteView ? MAP_CONFIG.satelliteUrl : MAP_CONFIG.streetUrl,
-          ],
-          tileSize: 256,
-          attribution: isSatelliteView
-            ? '© Esri'
-            : '© OpenStreetMap contributors',
-        },
-      },
-      layers: [
-        {
-          id: 'osm',
-          type: 'raster',
-          source: 'osm',
-          minzoom: 0,
-          maxzoom: 19,
-        },
-      ],
-    }),
-    [isSatelliteView]
-  );
-
-  // Ensure mapViewport has valid coordinates
-  const safeMapViewport = useMemo(() => {
-    const viewport = { ...mapViewport };
-
-    if (
-      typeof viewport.latitude !== 'number' ||
-      typeof viewport.longitude !== 'number' ||
-      isNaN(viewport.latitude) ||
-      isNaN(viewport.longitude)
-    ) {
-      viewport.latitude = DEFAULT_COORDINATES.latitude;
-      viewport.longitude = DEFAULT_COORDINATES.longitude;
+      console.log("After hasProperties filter:", filtered.length);
     }
 
-    if (typeof viewport.zoom !== 'number' || isNaN(viewport.zoom)) {
-      viewport.zoom = 12;
-    }
-
-    // CRITICAL: Remove bounds from the viewport passed to Map component
-    // The Map component should not receive bounds as it causes the fitBounds error
-    const { bounds, ...viewportWithoutBounds } = viewport;
-
-    console.log(
-      'MapView rendering with safeMapViewport:',
-      viewportWithoutBounds
-    );
-    return viewportWithoutBounds;
-  }, [mapViewport]);
-
-  const openInGoogleMaps = (property: Property) => {
-    const { latitude, longitude } = property.location;
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`;
-    window.open(url, '_blank');
-  };
-
-  const renderRating = (rating?: number) => {
-    // Only show rating if it exists and is greater than 0
-    if (!rating || rating === 0) return null;
-
-    return (
-      <div className="flex items-center space-x-1">
-        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-        <span className="text-xs font-medium">{rating}/5</span>
-      </div>
-    );
-  };
-
-  // Get circle GeoJSON for radius visualization with enhanced visibility
-  const getCircleGeoJSON = (property: Property) => {
-    if (!property.radius || property.radius === 0) return null;
-
-    const center = point([
-      property.location.longitude,
-      property.location.latitude,
-    ]);
-    const options = { steps: 64, units: 'meters' as const };
-    const circleGeojson = circle(center, property.radius, options);
-
-    return circleGeojson;
-  };
-
-  // Handle property detail navigation - close person detail if open
-  const handlePropertyDetailNavigation = (property: Property) => {
-    // Close person detail if it's open
-    if (isPersonDetailOpen) {
-      togglePersonDetail(false);
-    }
-    
-    setSelectedProperty(property);
-    togglePropertyDetail(true);
-  };
-
-  // Handle Live View toggle with improved feedback
-  const handleLiveViewToggle = (event: React.MouseEvent) => {
-    event.stopPropagation();
-    const newLiveViewState = !isLiveView;
-    setIsLiveView(newLiveViewState);
-    
-    // Provide immediate feedback to user
-    console.log(`Live View ${newLiveViewState ? 'enabled' : 'disabled'}`);
-    
-    if (!newLiveViewState) {
-      // When turning off Live View, reapply filters to show all properties
-      // This is handled here in the toggle function, not in the useEffect
-      console.log('Live View disabled: Reapplying filters');
-      // Note: We need to access applyFilters from the store
-      const { applyFilters } = useStore.getState();
-      applyFilters();
-    }
-  };
-
-  return (
-    <div className="relative w-full h-full">
-      <Map
-        {...safeMapViewport}
-        style={{ width: '100%', height: '100%' }}
-        mapStyle={mapStyle}
-        onLoad={onMapLoad}
-        onMove={onMapMove}
-        onClick={handleMapClick}
-        attributionControl={true}
-        mapLib={maplibreGl}
-        minZoom={MAP_CONFIG.minZoom}
-        maxZoom={MAP_CONFIG.maxZoom}
-      >
-        {/* Render radius circles for properties with enhanced visibility */}
-        {validProperties.map((property) => {
-          const circleData = getCircleGeoJSON(property);
-          if (!circleData) return null;
-
-          const isSelected = selectedProperty?.id === property.id;
-          const baseColor = getMarkerColor(property);
-
-          return (
-            <Source
-              key={`radius-${property.id}`}
-              type="geojson"
-              data={circleData}
-            >
-              <Layer
-                id={`radius-fill-${property.id}`}
-                type="fill"
-                paint={{
-                  'fill-color': baseColor,
-                  'fill-opacity': isSelected ? 0.25 : 0.15,
-                }}
-              />
-              <Layer
-                id={`radius-border-${property.id}`}
-                type="line"
-                paint={{
-                  'line-color': baseColor,
-                  'line-width': isSelected ? 3 : 2,
-                  'line-opacity': isSelected ? 0.8 : 0.6,
-                  'line-dasharray': isSelected ? [1, 0] : [2, 2],
-                }}
-              />
-            </Source>
-          );
-        })}
-
-        {validProperties.map((property) => {
-          const validLocation = ensureValidLocation(property.location);
-          const IconComponent = getMarkerIcon(property);
-          const markerSize = getMarkerSize();
-          const isSelected = selectedProperty?.id === property.id;
-
-          return (
-            <Marker
-              key={property.id}
-              longitude={validLocation.longitude}
-              latitude={validLocation.latitude}
-              anchor="center"
-              onClick={(e) => {
-                e.originalEvent.stopPropagation();
-                setPopupInfo(property);
-              }}
-            >
-              <div
-                className={`flex items-center justify-center rounded-full border-3 transition-all cursor-pointer shadow-lg ${
-                  isSelected
-                    ? 'scale-125 border-white shadow-xl animate-pulse ring-4 ring-white ring-opacity-50'
-                    : 'border-white shadow-md hover:scale-110 hover:shadow-xl'
-                }`}
-                style={{
-                  backgroundColor: getMarkerColor(property),
-                  width: markerSize,
-                  height: markerSize,
-                  borderWidth: '3px',
-                }}
-              >
-                <IconComponent
-                  size={markerSize * 0.55}
-                  color="white"
-                  strokeWidth={2}
-                  fill="none"
-                />
-              </div>
-            </Marker>
-          );
-        })}
-
-        {/* User location marker */}
-        {userLocation && (
-          <Marker
-            longitude={userLocation.longitude}
-            latitude={userLocation.latitude}
-            anchor="center"
-          >
-            <div className="relative">
-              <div className="w-6 h-6 bg-blue-500 rounded-full border-2 border-white shadow-lg animate-pulse" />
-              <div className="absolute -inset-1 bg-blue-500 rounded-full opacity-20 animate-ping" />
-            </div>
-          </Marker>
-        )}
-
-        {popupInfo && (
-          <Popup
-            longitude={ensureValidLocation(popupInfo.location).longitude}
-            latitude={ensureValidLocation(popupInfo.location).latitude}
-            anchor="bottom"
-            onClose={() => setPopupInfo(null)}
-            closeButton={false}
-            closeOnClick={false}
-            className="rounded-lg overflow-hidden"
-            maxWidth="320px"
-          >
-            <div className="p-1 bg-white">
-              {/* Header */}
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-2 mb-1">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
-                      {popupInfo.type || 'Property'}
-                    </span>
-                    {popupInfo.rating > 0 && renderRating(popupInfo.rating)}
-                  </div>
-                  <h3 className="font-semibold text-gray-900 text-sm leading-tight">
-                    {popupInfo.area || 'Property Area'}
-                  </h3>
-                </div>
-              </div>
-
-              {/* Price */}
-              <div className="mb-3">
-                <div className="text-lg font-bold text-blue-600 flex items-center">
-                  <IndianRupee size={16} />
-                  <span>{formatCurrency(popupInfo.price_min)}</span>
-                  {popupInfo.price_min !== popupInfo.price_max && (
-                    <span className="text-sm font-normal text-gray-600 ml-1">
-                      - {formatCurrency(popupInfo.price_max)}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Size */}
-              <div className="mb-3">
-                <div className="text-sm text-gray-600">
-                  <span className="font-medium">Size: </span>
-                  {popupInfo.size_min === popupInfo.size_max
-                    ? `${Math.round(popupInfo.size_min)} sq.yd`
-                    : `${Math.round(popupInfo.size_min)} - ${Math.round(
-                        popupInfo.size_max
-                      )} sq.yd`}
-                </div>
-              </div>
-
-              {/* Zone */}
-              {popupInfo.zone && (
-                <div className="mb-3">
-                  <div className="text-sm text-gray-600">
-                    <span className="font-medium">Zone: </span>
-                    {popupInfo.zone}
-                  </div>
-                </div>
-              )}
-
-              {/* Action Buttons */}
-              <div className="flex space-x-2">
-                <button
-                  className="flex-1 text-xs bg-blue-500 hover:bg-blue-600 text-white py-2 px-3 rounded transition-colors flex items-center justify-center space-x-1"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handlePropertyDetailNavigation(popupInfo);
-                  }}
-                >
-                  <ExternalLink size={12} />
-                  <span>Details</span>
-                </button>
-                <button
-                  className="flex-1 text-xs bg-green-500 hover:bg-green-600 text-white py-2 px-3 rounded transition-colors flex items-center justify-center space-x-1"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openInGoogleMaps(popupInfo);
-                  }}
-                >
-                  <Navigation size={12} />
-                </button>
-              </div>
-            </div>
-          </Popup>
-        )}
-
-        <NavigationControl position="bottom-right" />
-
-        {/* Live view toggle with improved styling and feedback */}
-        <div className="absolute top-4 left-4 bg-white rounded-md shadow-md p-2">
-          <button
-            onClick={handleLiveViewToggle}
-            className={`flex items-center space-x-2 px-3 py-1.5 rounded-md transition-all duration-200 ${
-              isLiveView 
-                ? 'bg-blue-50 text-blue-600 shadow-sm ring-1 ring-blue-200' 
-                : 'hover:bg-gray-100 text-gray-600'
-            }`}
-            title={isLiveView 
-              ? `Live view enabled - showing ${validProperties.length} properties in current map view` 
-              : 'Live view disabled - showing all filtered properties'
-            }
-          >
-            <Eye
-              size={18}
-              className={`transition-colors ${isLiveView ? 'text-blue-600' : 'text-gray-600'}`}
-            />
-            <span className="text-sm font-medium">Live View ({isLiveView 
-              ? `${validProperties.length}`
-              : `${filteredProperties.length}`
-            })</span>
-            {isLiveView && (
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-            )}
-          </button>
-         
-        </div>
-
-        {/* Map controls */}
-        <div className="absolute top-4 right-4 bg-white rounded-md shadow-md p-1 flex flex-col space-y-1">
-          <button
-            onClick={(event) => {
-              event.stopPropagation();
-              setMapViewport({
-                latitude: DEFAULT_COORDINATES.latitude,
-                longitude: DEFAULT_COORDINATES.longitude,
-                zoom: 12,
-              });
-            }}
-            className="p-2 hover:bg-gray-100 rounded-md transition-colors"
-            title="Center on Karnal"
-          >
-            <Home size={18} />
-          </button>
-          <button
-            className="p-2 hover:bg-gray-100 rounded-md transition-colors"
-            onClick={(event) => {
-              event.stopPropagation();
-              setIsSatelliteView(!isSatelliteView);
-            }}
-            title={
-              isSatelliteView
-                ? 'Switch to Street View'
-                : 'Switch to Satellite View'
-            }
-          >
-            {isSatelliteView ? <MapIcon size={18} /> : <Layers size={18} />}
-          </button>
-        </div>
-
-        {/* GPS button */}
-        <div className="absolute bottom-4 left-4 bg-white rounded-md shadow-md p-1">
-          <button
-            onClick={handleGPSLocation}
-            className="p-2 hover:bg-gray-100 rounded-md transition-colors"
-            title="Use current location"
-          >
-            <Crosshair size={18} />
-          </button>
-        </div>
-      </Map>
-    </div>
-  );
-};
-
-export default MapView;
+    console.log("Final filtered persons:", filtered.length);
+    set({ filteredPersons: filtered });
+  },
+}));
