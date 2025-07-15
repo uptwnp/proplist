@@ -40,10 +40,24 @@ const SelectPersonModal: React.FC<SelectPersonModalProps> = ({
   useEffect(() => {
     let isMounted = true;
 
+    console.log("SelectPersonModal: Opening - ensuring clean person filter state");
+    
+    // CRITICAL: Reset person filters when modal opens to prevent contamination
+    const { updatePersonFilters, applyPersonFilters } = useStore.getState();
+    updatePersonFilters({
+      searchQuery: '',
+      roles: [],
+      hasProperties: null
+    });
+
     const loadPersonsFromAPI = async () => {
       // Only load if we don't have persons data or if it's stale
       if (persons.length > 0) {
         console.log("SelectPersonModal: Using existing persons data");
+        // Even with existing data, ensure filters are clean
+        setTimeout(() => {
+          applyPersonFilters();
+        }, 50);
         return;
       }
 
@@ -65,6 +79,7 @@ const SelectPersonModal: React.FC<SelectPersonModalProps> = ({
         if (isMounted) {
           // Update the store with the fetched persons
           setPersons(personsFromAPI);
+          applyPersonFilters(); // Apply clean filters after setting data
 
           console.log(
             "SelectPersonModal: Persons loaded successfully, count:",

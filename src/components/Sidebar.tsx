@@ -41,22 +41,20 @@ const Sidebar: React.FC = () => {
         console.log("Sidebar: Loading persons for persons tab (first time)");
         hasLoadedPersons.current = true;
         
-        // CRITICAL: Reset person filters BEFORE loading to ensure clean state
-        console.log("Sidebar: Resetting person filters before loading");
-        updatePersonFilters({
-          searchQuery: '',
-          roles: [],
-          hasProperties: null
-        });
-        
         // Load persons data and ensure filters are applied
         loadPersons()
           .then(() => {
-            console.log("Sidebar: Persons loaded, applying filters...");
-            // Small delay to ensure state is updated
+            console.log("Sidebar: Persons loaded, resetting filters and applying...");
+            // Reset filters after data is loaded
+            updatePersonFilters({
+              searchQuery: '',
+              roles: [],
+              hasProperties: null
+            });
+            // Apply clean filters
             setTimeout(() => {
               applyPersonFilters();
-            }, 100);
+            }, 50);
           })
           .catch((error) => {
             console.error("Failed to load persons:", error);
@@ -72,19 +70,23 @@ const Sidebar: React.FC = () => {
     updatePersonFilters, // Added to dependencies
   ]);
 
-  // ADDITIONAL: Reset person filters every time persons tab is activated
+  // CRITICAL: Force reset person filters every time persons tab is activated
   useEffect(() => {
     if (isSidebarOpen && activeTab === "persons") {
-      console.log("Sidebar: Persons tab activated, ensuring clean filter state");
+      console.log("Sidebar: Persons tab activated, FORCE resetting filters");
+      
+      // Force reset filters
       updatePersonFilters({
         searchQuery: '',
         roles: [],
         hasProperties: null
       });
-      // Apply filters after a short delay to ensure state is updated
+      
+      // Force reapply filters to show all persons
       setTimeout(() => {
+        console.log("Sidebar: Force applying clean filters");
         applyPersonFilters();
-      }, 50);
+      }, 100);
     }
   }, [
     activeTab,
