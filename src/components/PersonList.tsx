@@ -46,7 +46,7 @@ const PersonList: React.FC = () => {
       filteredPersonsCount: filteredPersons.length,
     });
 
-    if (persons.length === 0) {
+    if (persons.length < 100) {
       console.log("PersonList: No persons data, loading...");
       loadPersons().catch((error) => {
         console.error("Failed to load persons:", error);
