@@ -16,7 +16,7 @@ import {
   PROPERTY_TYPE_ICONS,
   MAP_CONFIG,
 } from '../constants';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, formatRatePerGaj } from '../utils/formatters';
 import circle from '@turf/circle';
 import { point } from '@turf/helpers';
 
@@ -84,6 +84,72 @@ const MapView: React.FC = () => {
     localStorage.setItem('mapSatelliteView', JSON.stringify(isSatelliteView));
   }, [isSatelliteView]);
 
+  // Load saved viewport on component mount
+  useEffect(() => {
+    const savedViewport = localStorage.getItem('mapViewport');
+    if (savedViewport) {
+      try {
+        const parsed = JSON.parse(savedViewport);
+        // Validate the saved viewport data
+        if (
+          parsed &&
+          typeof parsed.latitude === 'number' &&
+          typeof parsed.longitude === 'number' &&
+          typeof parsed.zoom === 'number' &&
+          !isNaN(parsed.latitude) &&
+          !isNaN(parsed.longitude) &&
+          !isNaN(parsed.zoom) &&
+          parsed.latitude >= -90 &&
+          parsed.latitude <= 90 &&
+          parsed.longitude >= -180 &&
+          parsed.longitude <= 180 &&
+          parsed.zoom >= MAP_CONFIG.minZoom &&
+          parsed.zoom <= MAP_CONFIG.maxZoom
+        ) {
+          console.log('Loading saved map viewport:', parsed);
+          setMapViewport({
+            latitude: parsed.latitude,
+            longitude: parsed.longitude,
+            zoom: parsed.zoom,
+          });
+        } else {
+          console.warn('Invalid saved viewport data, using default');
+          localStorage.removeItem('mapViewport');
+        }
+      } catch (error) {
+        console.error('Error parsing saved viewport:', error);
+        localStorage.removeItem('mapViewport');
+      }
+    }
+  }, []); // Empty dependency array to run only once on mount
+
+  // Save viewport changes to localStorage with debouncing
+  useEffect(() => {
+    // Debounce viewport saving to avoid excessive localStorage writes
+    const timeoutId = setTimeout(() => {
+      if (
+        mapViewport &&
+        typeof mapViewport.latitude === 'number' &&
+        typeof mapViewport.longitude === 'number' &&
+        typeof mapViewport.zoom === 'number' &&
+        !isNaN(mapViewport.latitude) &&
+        !isNaN(mapViewport.longitude) &&
+        !isNaN(mapViewport.zoom)
+      ) {
+        const viewportToSave = {
+          latitude: mapViewport.latitude,
+          longitude: mapViewport.longitude,
+          zoom: mapViewport.zoom,
+        };
+        
+        console.log('Saving map viewport:', viewportToSave);
+        localStorage.setItem('mapViewport', JSON.stringify(viewportToSave));
+      }
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [mapViewport.latitude, mapViewport.longitude, mapViewport.zoom]);
+
   // Live View Effect - Update filtered properties based on map bounds
   useEffect(() => {
     if (!isLiveView) {
@@ -132,15 +198,10 @@ const MapView: React.FC = () => {
   const validProperties = useMemo(() => {
     return filteredProperties.filter((property) => {
       const location = ensureValidLocation(property.location);
-      // Only include properties where location is not the backup (meaning they have real coordinates)
+      // Only include properties that have real coordinates (not default/backup coordinates)
       return (
         location.latitude !== DEFAULT_COORDINATES.latitude ||
-        location.longitude !== DEFAULT_COORDINATES.longitude ||
-        (property.location &&
-          typeof property.location.latitude === 'number' &&
-          typeof property.location.longitude === 'number' &&
-          !isNaN(property.location.latitude) &&
-          !isNaN(property.location.longitude))
+        location.longitude !== DEFAULT_COORDINATES.longitude
       );
     });
   }, [filteredProperties]);
@@ -602,6 +663,18 @@ const MapView: React.FC = () => {
                   </div>
                 </div>
               )}
+
+              {/* Rate per Gaj */}
+              <div className="mb-3">
+                <div className="text-xs text-gray-500">
+                  {formatRatePerGaj(
+                    popupInfo.price_min,
+                    popupInfo.price_max,
+                    popupInfo.size_min,
+                    popupInfo.size_max
+                  )}
+                </div>
+              </div>
 
               {/* Action Buttons */}
               <div className="flex space-x-2">

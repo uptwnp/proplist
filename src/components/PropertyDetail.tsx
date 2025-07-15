@@ -26,7 +26,7 @@ import {
   Calendar,
   Clock,
 } from "lucide-react";
-import { formatCurrency } from "../utils/formatters";
+import { formatCurrency, formatRatePerGaj } from "../utils/formatters";
 import SelectPersonModal from "./SelectPersonModal";
 import ConfirmationModal from "./ConfirmationModal";
 import LocationUpdateModal from "./LocationUpdateModal";
@@ -556,6 +556,15 @@ Location is accurate up to *${radiusText}*
                 <p className="text-gray-700 leading-relaxed">
                   {selectedProperty.description}
                 </p>
+                {/* Rate per Gaj */}
+                <div className="text-xs text-gray-500 mt-2 pt-2 border-t border-gray-100">
+                  {formatRatePerGaj(
+                    selectedProperty.price_min,
+                    selectedProperty.price_max,
+                    selectedProperty.size_min,
+                    selectedProperty.size_max
+                  )}
+                </div>
               </div>
             )}
 

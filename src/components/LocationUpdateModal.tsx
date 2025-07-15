@@ -47,11 +47,45 @@ const LocationUpdateModal: React.FC<LocationUpdateModalProps> = ({ property, onC
   
   const [mapViewport, setMapViewport] = useState(() => {
     const validLocation = ensureValidLocation(property.location);
-    return {
+    
+    // Try to load saved viewport first, but use property location if available
+    const savedViewport = localStorage.getItem('mapViewport');
+    let initialViewport = {
       latitude: validLocation.latitude,
       longitude: validLocation.longitude,
       zoom: 15
     };
+    
+    // If property has a valid location (not default), use it
+    // Otherwise, try to use saved viewport
+    if (
+      validLocation.latitude === BACKUP_COORDINATES.latitude &&
+      validLocation.longitude === BACKUP_COORDINATES.longitude &&
+      savedViewport
+    ) {
+      try {
+        const parsed = JSON.parse(savedViewport);
+        if (
+          parsed &&
+          typeof parsed.latitude === 'number' &&
+          typeof parsed.longitude === 'number' &&
+          typeof parsed.zoom === 'number' &&
+          !isNaN(parsed.latitude) &&
+          !isNaN(parsed.longitude) &&
+          !isNaN(parsed.zoom)
+        ) {
+          initialViewport = {
+            latitude: parsed.latitude,
+            longitude: parsed.longitude,
+            zoom: Math.max(15, parsed.zoom) // Use at least zoom 15 for location editing
+          };
+        }
+      } catch (error) {
+        console.error('Error parsing saved viewport in location modal:', error);
+      }
+    }
+    
+    return initialViewport;
   });
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -67,6 +101,31 @@ const LocationUpdateModal: React.FC<LocationUpdateModalProps> = ({ property, onC
   useEffect(() => {
     localStorage.setItem('mapSatelliteView', JSON.stringify(isSatelliteView));
   }, [isSatelliteView]);
+
+  // Save viewport changes to localStorage with debouncing (for location modal)
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (
+        mapViewport &&
+        typeof mapViewport.latitude === 'number' &&
+        typeof mapViewport.longitude === 'number' &&
+        typeof mapViewport.zoom === 'number' &&
+        !isNaN(mapViewport.latitude) &&
+        !isNaN(mapViewport.longitude) &&
+        !isNaN(mapViewport.zoom)
+      ) {
+        const viewportToSave = {
+          latitude: mapViewport.latitude,
+          longitude: mapViewport.longitude,
+          zoom: mapViewport.zoom,
+        };
+        
+        localStorage.setItem('mapViewport', JSON.stringify(viewportToSave));
+      }
+    }, 1000); // 1 second debounce for location modal
+
+    return () => clearTimeout(timeoutId);
+  }, [mapViewport.latitude, mapViewport.longitude, mapViewport.zoom]);
 
   // Generate search suggestions based on zones
   const generateSearchSuggestions = useCallback((query: string) => {

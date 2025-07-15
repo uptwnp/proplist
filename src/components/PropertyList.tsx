@@ -17,6 +17,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { formatCurrency } from '../utils/formatters';
+import { formatRatePerGaj } from '../utils/formatters';
 import ConfirmationModal from './ConfirmationModal';
 import LocationUpdateModal from './LocationUpdateModal';
 import { DEFAULT_COORDINATES, ITEMS_PER_PAGE } from '../constants';
@@ -252,6 +253,16 @@ const PropertyList: React.FC = () => {
                       >
                         {property.description || 'Property Area'}
                       </p>
+
+                      {/* Rate per Gaj */}
+                      <div className="text-xs text-gray-500 mt-1">
+                        {formatRatePerGaj(
+                          property.price_min,
+                          property.price_max,
+                          property.size_min,
+                          property.size_max
+                        )}
+                      </div>
 
                       {/* Location Status */}
                       {!hasLocation(property) && (
