@@ -637,7 +637,7 @@ export const useStore = create<Store>((set, get) => ({
       return state.dataLoadingPromises.persons;
     }
 
-    if (state.persons.length > 0 && !state.loadingStates.persons) {
+    if (state.persons.length > 10 && !state.loadingStates.persons) {
       console.log("Persons already loaded, skipping");
       return Promise.resolve();
     }
@@ -830,7 +830,9 @@ export const useStore = create<Store>((set, get) => ({
 
     // Check if already loading
     if (state.dataLoadingPromises.propertyDetails.has(id)) {
-      console.log(`Property ${id} details already loading, returning existing promise`);
+      console.log(
+        `Property ${id} details already loading, returning existing promise`
+      );
       return state.dataLoadingPromises.propertyDetails.get(id)!;
     }
 
@@ -838,7 +840,7 @@ export const useStore = create<Store>((set, get) => ({
     const cachedDetails = storage.getPropertyDetails(id);
     if (cachedDetails) {
       console.log(`Property ${id} details found in cache`);
-      
+
       // Update the property in the store with cached data
       const validatedProperty = {
         ...cachedDetails.property,
@@ -852,7 +854,9 @@ export const useStore = create<Store>((set, get) => ({
 
         // Merge cached persons, connections, and links
         const existingPersonIds = new Set(state.persons.map((p) => p.id));
-        const newPersons = cachedDetails.persons.filter((p: Person) => !existingPersonIds.has(p.id));
+        const newPersons = cachedDetails.persons.filter(
+          (p: Person) => !existingPersonIds.has(p.id)
+        );
 
         const updatedPersons = [...state.persons, ...newPersons];
         const updatedConnections = [
@@ -886,7 +890,12 @@ export const useStore = create<Store>((set, get) => ({
           await propertyAPI.getById(id);
 
         // Cache the details
-        storage.setPropertyDetails(id, { property, persons, connections, links });
+        storage.setPropertyDetails(id, {
+          property,
+          persons,
+          connections,
+          links,
+        });
 
         // Update the property in the store with validated location
         const validatedProperty = {
@@ -901,7 +910,9 @@ export const useStore = create<Store>((set, get) => ({
 
           // Merge new persons, connections, and links
           const existingPersonIds = new Set(state.persons.map((p) => p.id));
-          const newPersons = persons.filter((p) => !existingPersonIds.has(p.id));
+          const newPersons = persons.filter(
+            (p) => !existingPersonIds.has(p.id)
+          );
 
           const updatedPersons = [...state.persons, ...newPersons];
           const updatedConnections = [
@@ -930,7 +941,7 @@ export const useStore = create<Store>((set, get) => ({
 
         get().applyFilters();
         get().applyPersonFilters();
-        
+
         console.log(`Property ${id} details loaded and cached successfully`);
       } catch (error) {
         console.error("Failed to load property details:", error);
@@ -971,7 +982,9 @@ export const useStore = create<Store>((set, get) => ({
 
     // Check if already loading
     if (state.dataLoadingPromises.personDetails.has(id)) {
-      console.log(`Person ${id} details already loading, returning existing promise`);
+      console.log(
+        `Person ${id} details already loading, returning existing promise`
+      );
       return state.dataLoadingPromises.personDetails.get(id)!;
     }
 
@@ -979,7 +992,7 @@ export const useStore = create<Store>((set, get) => ({
     const cachedDetails = storage.getPersonDetails(id);
     if (cachedDetails) {
       console.log(`Person ${id} details found in cache`);
-      
+
       // Update the person in the store with cached data
       set((state) => {
         const updatedPersons = state.persons.map((p) =>
@@ -1029,7 +1042,12 @@ export const useStore = create<Store>((set, get) => ({
           await personAPI.getById(id);
 
         // Cache the details
-        storage.setPersonDetails(id, { person, properties, connections, links });
+        storage.setPersonDetails(id, {
+          person,
+          properties,
+          connections,
+          links,
+        });
 
         // Update the person in the store
         set((state) => {
@@ -1038,7 +1056,9 @@ export const useStore = create<Store>((set, get) => ({
           );
 
           // Merge new properties, connections, and links
-          const existingPropertyIds = new Set(state.properties.map((p) => p.id));
+          const existingPropertyIds = new Set(
+            state.properties.map((p) => p.id)
+          );
           const newProperties = properties
             .filter((p) => !existingPropertyIds.has(p.id))
             .map((property) => ({
@@ -1075,7 +1095,7 @@ export const useStore = create<Store>((set, get) => ({
 
         get().applyFilters();
         get().applyPersonFilters();
-        
+
         console.log(`Person ${id} details loaded and cached successfully`);
       } catch (error) {
         console.error("Failed to load person details:", error);

@@ -100,38 +100,17 @@ function App() {
       isInitializing.current = true;
       hasInitialized.current = true;
       
-      console.log("App initializing with cache-first approach...", {
-        timestamp: new Date().toISOString(),
-        userAgent: navigator.userAgent,
-        location: window.location.href
-      });
+      console.log("App initializing with cache-first approach...");
 
       const initializeApp = async () => {
         try {
-          // Clear any stale service worker caches on app start
-          if ('serviceWorker' in navigator && 'caches' in window) {
-            try {
-              const cacheNames = await caches.keys();
-              const oldCaches = cacheNames.filter(name => name.startsWith('my-properties-v') && name !== 'my-properties-v2');
-              await Promise.all(oldCaches.map(name => caches.delete(name)));
-              console.log('Cleared old caches:', oldCaches);
-            } catch (error) {
-              console.warn('Failed to clear old caches:', error);
-            }
-          }
-
           // Load from cache immediately
           await loadFromCache();
 
           // Then load fresh data from API
           await loadAllData();
-          
-          console.log("App initialization completed successfully");
         } catch (error) {
-          console.error("Failed to initialize app:", error, {
-            timestamp: new Date().toISOString(),
-            stack: error.stack
-          });
+          console.error("Failed to initialize app:", error);
         } finally {
           isInitializing.current = false;
         }

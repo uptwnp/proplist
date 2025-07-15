@@ -385,8 +385,6 @@ Location is accurate up to *${radiusText}*
 
   // Handle person click - navigate to person detail and close property detail if needed
   const handlePersonClick = (person: any) => {
-    console.log("PropertyDetail: Person clicked, ensuring no filter contamination");
-    
     // Close property detail if on mobile to make room for person detail
     if (isMobileView) {
       togglePropertyDetail(false);

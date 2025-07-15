@@ -31,7 +31,6 @@ const PersonList: React.FC = () => {
     persons,
     error,
     applyPersonFilters,
-    updatePersonFilters, // Add this
   } = useStore();
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -42,41 +41,24 @@ const PersonList: React.FC = () => {
 
   // Load persons when component mounts - but only if we don't have data
   useEffect(() => {
-    console.log("PersonList mounted - FORCE FRESH API CALL", {
+    console.log("PersonList mounted, checking data:", {
       personsCount: persons.length,
       filteredPersonsCount: filteredPersons.length,
-      timestamp: new Date().toISOString()
     });
 
-    // STEP 1: Force reset person filters to absolute defaults
-    console.log("PersonList: STEP 1 - Force resetting filters to defaults");
-    const resetFilters = () => {
-      updatePersonFilters({
-        searchQuery: '',
-        roles: [],
-        hasProperties: null
+    if (persons.length === 0) {
+      console.log("PersonList: No persons data, loading...");
+      loadPersons().catch((error) => {
+        console.error("Failed to load persons:", error);
       });
-    };
-    
-    // Reset filters immediately
-    resetFilters();
-
-
-    // STEP 2: ALWAYS force fresh API call - don't rely on cached data
-    console.log("PersonList: STEP 2 - FORCE FRESH API CALL (ignoring cache)");
-    loadPersons()
-      .then(() => {
-        console.log("PersonList: Fresh API data loaded, resetting filters again");
-        resetFilters();
-        setTimeout(() => {
-          console.log("PersonList: Applying clean filters to fresh API data");
-          applyPersonFilters();
-        }, 100);
-      })
-      .catch((error) => {
-        console.error("PersonList: Failed to load fresh person data:", error);
-      });
-  }, [loadPersons, persons.length, filteredPersons.length, applyPersonFilters, updatePersonFilters]);
+    } else if (filteredPersons.length === 0 && persons.length > 0) {
+      // If we have persons but no filtered persons, apply filters
+      console.log(
+        "PersonList: Have persons but no filtered persons, applying filters..."
+      );
+      applyPersonFilters();
+    }
+  }, [loadPersons, persons.length, filteredPersons.length, applyPersonFilters]);
 
   const totalPages = Math.ceil(filteredPersons.length / ITEMS_PER_PAGE);
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
