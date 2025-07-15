@@ -104,22 +104,15 @@ function App() {
 
       const initializeApp = async () => {
         try {
-          // Set loading states at the very beginning
-          console.log("Setting initial loading states...");
-          
           // Load from cache immediately
           await loadFromCache();
 
           // Then load fresh data from API
           await loadAllData();
-          
-          console.log("App initialization completed successfully");
         } catch (error) {
           console.error("Failed to initialize app:", error);
-          // Ensure loading states are cleared even on error
         } finally {
           isInitializing.current = false;
-          console.log("App initialization process finished");
         }
       };
 
@@ -144,11 +137,8 @@ function App() {
     return () => clearInterval(refreshInterval);
   }, [lastSyncTime, refreshData]);
 
-  // Show loading state for initial load - improved logic
-  const shouldShowLoading = (isLoading || isLoadingFromCache) && 
-    (!hasInitialized.current || isInitializing.current);
-  
-  if (shouldShowLoading) {
+  // Show loading state only for initial load when no cache is available
+  if ((isLoading || isLoadingFromCache) && !hasInitialized.current) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -156,17 +146,14 @@ function App() {
           <p className="text-gray-600">
             {isLoadingFromCache ? "Loading from cache..." : "Loading data..."}
           </p>
-          <p className="text-xs text-gray-400 mt-1">
-            {isInitializing.current ? "Initializing application..." : "Please wait..."}
-          </p>
           <p className="text-xs text-gray-500 mt-2">Version {APP_VERSION}</p>
         </div>
       </div>
     );
   }
 
-  // Show error state only if we have an error and no cached data
-  if (error && !hasInitialized.current && !shouldShowLoading) {
+  // Show error state
+  if (error && !hasInitialized.current) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -186,14 +173,10 @@ function App() {
             </svg>
           </div>
           <p className="text-red-600 mb-4">{error}</p>
-          <p className="text-sm text-gray-600 mb-4">
-            The application failed to load properly. This might be due to network issues or server problems.
-          </p>
           <button
             onClick={() => {
               hasInitialized.current = false;
               isInitializing.current = false;
-              console.log("Retrying app initialization...");
               loadFromCache();
               loadAllData();
             }}

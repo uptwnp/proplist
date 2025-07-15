@@ -31,7 +31,6 @@ const PersonList: React.FC = () => {
     persons,
     error,
     applyPersonFilters,
-    resetPersonFilters,
   } = useStore();
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -61,10 +60,6 @@ const PersonList: React.FC = () => {
     }
   }, [loadPersons, persons.length, filteredPersons.length, applyPersonFilters]);
 
-  // FIXED: Reset current page when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [filteredPersons.length]);
   const totalPages = Math.ceil(filteredPersons.length / ITEMS_PER_PAGE);
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const endIndex = startIndex + ITEMS_PER_PAGE;
@@ -106,18 +101,9 @@ const PersonList: React.FC = () => {
   };
 
   const handleRetry = () => {
-    // Reset filters and reload data
-    resetPersonFilters();
     refreshData();
   };
 
-  const handleRefreshFilters = () => {
-    console.log("PersonList: Refreshing filters...");
-    resetPersonFilters();
-    setTimeout(() => {
-      applyPersonFilters();
-    }, 50);
-  };
   // Show loading state only when initially loading and no data
   if (isLoading && persons.length === 0) {
     return (
@@ -189,10 +175,10 @@ const PersonList: React.FC = () => {
                     Try adjusting your search or filters
                   </p>
                   <button
-                    onClick={handleRefreshFilters}
+                    onClick={() => applyPersonFilters()}
                     className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 text-sm"
                   >
-                    Reset & Refresh Filters
+                    Refresh Filters
                   </button>
                 </>
               )}
