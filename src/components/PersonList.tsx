@@ -31,6 +31,7 @@ const PersonList: React.FC = () => {
     persons,
     error,
     applyPersonFilters,
+    updatePersonFilters, // Add this
   } = useStore();
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -41,6 +42,20 @@ const PersonList: React.FC = () => {
 
   // Load persons when component mounts - but only if we don't have data
   useEffect(() => {
+    console.log("PersonList mounted - ensuring clean state", {
+      personsCount: persons.length,
+      filteredPersonsCount: filteredPersons.length,
+      timestamp: new Date().toISOString()
+    });
+
+    // CRITICAL: Always reset person filters when PersonList mounts
+    // This ensures no residual filtering from property views
+    updatePersonFilters({
+      searchQuery: '',
+      roles: [],
+      hasProperties: null
+    });
+
     console.log("PersonList mounted, checking data:", {
       personsCount: persons.length,
       filteredPersonsCount: filteredPersons.length,
@@ -56,9 +71,12 @@ const PersonList: React.FC = () => {
       console.log(
         "PersonList: Have persons but no filtered persons, applying filters..."
       );
-      applyPersonFilters();
+      // Small delay to ensure filter reset has taken effect
+      setTimeout(() => {
+        applyPersonFilters();
+      }, 100);
     }
-  }, [loadPersons, persons.length, filteredPersons.length, applyPersonFilters]);
+  }, [loadPersons, persons.length, filteredPersons.length, applyPersonFilters, updatePersonFilters]);
 
   const totalPages = Math.ceil(filteredPersons.length / ITEMS_PER_PAGE);
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;

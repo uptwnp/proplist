@@ -11,6 +11,7 @@
   <meta name="theme-color" content="#3B82F6" />
   <meta name="description"
     content="My Properties - Comprehensive property management system for real estate professionals" />
+  <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="My Properties" />
@@ -30,13 +31,47 @@
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
+        // Unregister old service worker first
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for(let registration of registrations) {
+            registration.unregister();
+          }
+        });
+        
+        // Register new service worker
+        navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
           .then((registration) => {
             console.log('SW registered: ', registration);
+            
+            // Force update if there's a waiting service worker
+            if (registration.waiting) {
+              registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+            }
+            
+            // Listen for updates
+            registration.addEventListener('updatefound', () => {
+              const newWorker = registration.installing;
+              if (newWorker) {
+                newWorker.addEventListener('statechange', () => {
+                  if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    // New service worker is available, reload the page
+                    console.log('New service worker available, reloading...');
+                    window.location.reload();
+                  }
+                });
+              }
+            });
           })
           .catch((registrationError) => {
             console.log('SW registration failed: ', registrationError);
           });
+      });
+      
+      // Listen for service worker messages
+      navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'RELOAD_PAGE') {
+          window.location.reload();
+        }
       });
     }
   </script>

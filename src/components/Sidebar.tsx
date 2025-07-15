@@ -40,6 +40,15 @@ const Sidebar: React.FC = () => {
       } else if (activeTab === "persons" && !hasLoadedPersons.current) {
         console.log("Sidebar: Loading persons for persons tab (first time)");
         hasLoadedPersons.current = true;
+        
+        // CRITICAL: Reset person filters BEFORE loading to ensure clean state
+        console.log("Sidebar: Resetting person filters before loading");
+        updatePersonFilters({
+          searchQuery: '',
+          roles: [],
+          hasProperties: null
+        });
+        
         // Load persons data and ensure filters are applied
         loadPersons()
           .then(() => {
@@ -59,6 +68,28 @@ const Sidebar: React.FC = () => {
     activeTab,
     loadProperties,
     loadPersons,
+    applyPersonFilters,
+    updatePersonFilters, // Added to dependencies
+  ]);
+
+  // ADDITIONAL: Reset person filters every time persons tab is activated
+  useEffect(() => {
+    if (isSidebarOpen && activeTab === "persons") {
+      console.log("Sidebar: Persons tab activated, ensuring clean filter state");
+      updatePersonFilters({
+        searchQuery: '',
+        roles: [],
+        hasProperties: null
+      });
+      // Apply filters after a short delay to ensure state is updated
+      setTimeout(() => {
+        applyPersonFilters();
+      }, 50);
+    }
+  }, [
+    activeTab,
+    isSidebarOpen,
+    updatePersonFilters,
     applyPersonFilters,
   ]);
 
