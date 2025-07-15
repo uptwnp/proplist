@@ -67,11 +67,13 @@ const PersonList: React.FC = () => {
       console.log("PersonList: Data exists, applying clean filters");
       setTimeout(() => applyPersonFilters(), 50);
     }
+  }, []);
 
   // FIXED: Reset current page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [filteredPersons.length]);
+
   const totalPages = Math.ceil(filteredPersons.length / ITEMS_PER_PAGE);
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const endIndex = startIndex + ITEMS_PER_PAGE;
@@ -388,5 +390,6 @@ const PersonList: React.FC = () => {
       />
     </>
   );
+};
 
 export default PersonList;
