@@ -37,24 +37,26 @@ const Sidebar: React.FC = () => {
         console.log("Sidebar: Loading properties for properties tab (first time)");
         hasLoadedProperties.current = true;
         loadProperties(); // This now has built-in deduplication
-      } else if (activeTab === "persons" && !hasLoadedPersons.current) {
-        console.log("Sidebar: Loading persons for persons tab (first time)");
+      } else if (activeTab === "persons") {
+        console.log("Sidebar: Loading persons for persons tab - FORCE FRESH LOAD");
+        // CRITICAL: Always load fresh person data, don't rely on cache
         hasLoadedPersons.current = true;
         
-        // Load persons data and ensure filters are applied
+        // Force fresh load of persons data
         loadPersons()
           .then(() => {
-            console.log("Sidebar: Persons loaded, resetting filters and applying...");
-            // Reset filters after data is loaded
+            console.log("Sidebar: Fresh persons data loaded, resetting filters...");
+            // Force reset filters after fresh data load
             updatePersonFilters({
               searchQuery: '',
               roles: [],
               hasProperties: null
             });
-            // Apply clean filters
+            // Apply clean filters to fresh data
             setTimeout(() => {
+              console.log("Sidebar: Applying clean filters to fresh person data");
               applyPersonFilters();
-            }, 50);
+            }, 100);
           })
           .catch((error) => {
             console.error("Failed to load persons:", error);
@@ -70,29 +72,40 @@ const Sidebar: React.FC = () => {
     updatePersonFilters, // Added to dependencies
   ]);
 
-  // CRITICAL: Force reset person filters every time persons tab is activated
+  // CRITICAL: Force reset person filters AND reload data every time persons tab is activated
   useEffect(() => {
     if (isSidebarOpen && activeTab === "persons") {
-      console.log("Sidebar: Persons tab activated, FORCE resetting filters");
+      console.log("Sidebar: Persons tab activated - FORCE FRESH DATA AND RESET FILTERS");
       
-      // Force reset filters
+      // Step 1: Force reset filters immediately
       updatePersonFilters({
         searchQuery: '',
         roles: [],
         hasProperties: null
       });
       
-      // Force reapply filters to show all persons
+      // Step 2: Force reload person data from API (bypass cache)
       setTimeout(() => {
-        console.log("Sidebar: Force applying clean filters");
-        applyPersonFilters();
-      }, 100);
+        console.log("Sidebar: Force reloading person data from API");
+        loadPersons()
+          .then(() => {
+            console.log("Sidebar: Fresh person data reloaded, applying clean filters");
+            // Step 3: Apply clean filters to fresh data
+            setTimeout(() => {
+              applyPersonFilters();
+            }, 50);
+          })
+          .catch((error) => {
+            console.error("Failed to reload persons:", error);
+          });
+      }, 50);
     }
   }, [
     activeTab,
     isSidebarOpen,
     updatePersonFilters,
     applyPersonFilters,
+    loadPersons, // Added to force fresh loads
   ]);
 
   // Reset load flags when data is refreshed

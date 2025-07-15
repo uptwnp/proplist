@@ -42,13 +42,13 @@ const PersonList: React.FC = () => {
 
   // Load persons when component mounts - but only if we don't have data
   useEffect(() => {
-    console.log("PersonList mounted - CRITICAL: ensuring completely clean state", {
+    console.log("PersonList mounted - FORCE FRESH API CALL", {
       personsCount: persons.length,
       filteredPersonsCount: filteredPersons.length,
       timestamp: new Date().toISOString()
     });
 
-    // CRITICAL STEP 1: Force reset person filters to absolute defaults
+    // STEP 1: Force reset person filters to absolute defaults
     console.log("PersonList: STEP 1 - Force resetting filters to defaults");
     const resetFilters = () => {
       updatePersonFilters({
@@ -58,45 +58,24 @@ const PersonList: React.FC = () => {
       });
     };
     
-    // Reset immediately
+    // Reset filters immediately
     resetFilters();
 
-    console.log("PersonList mounted, checking data:", {
-      personsCount: persons.length,
-      filteredPersonsCount: filteredPersons.length,
-    });
 
-    // CRITICAL STEP 2: Load data if needed
-    if (persons.length === 0) {
-      console.log("PersonList: STEP 2 - No persons data, loading...");
-      loadPersons()
-        .then(() => {
-          console.log("PersonList: Data loaded, force resetting filters again");
-          resetFilters();
-          setTimeout(() => {
-            console.log("PersonList: Applying clean filters after data load");
-            applyPersonFilters();
-          }, 100);
-        })
-        .catch((error) => {
-          console.error("Failed to load persons:", error);
-        });
-    } else if (filteredPersons.length === 0 && persons.length > 0) {
-      console.log("PersonList: STEP 3 - Have persons but no filtered persons, force clean filters");
-      resetFilters();
-      setTimeout(() => {
-        console.log("PersonList: Applying filters to show all persons");
-        applyPersonFilters();
-      }, 150);
-    } else {
-      // Even if we have filtered persons, reset and reapply to ensure clean state
-      console.log("PersonList: STEP 4 - Have data, but ensuring clean filter state");
-      resetFilters();
-      setTimeout(() => {
-        console.log("PersonList: Final filter application to ensure all persons shown");
-        applyPersonFilters();
-      }, 200);
-    }
+    // STEP 2: ALWAYS force fresh API call - don't rely on cached data
+    console.log("PersonList: STEP 2 - FORCE FRESH API CALL (ignoring cache)");
+    loadPersons()
+      .then(() => {
+        console.log("PersonList: Fresh API data loaded, resetting filters again");
+        resetFilters();
+        setTimeout(() => {
+          console.log("PersonList: Applying clean filters to fresh API data");
+          applyPersonFilters();
+        }, 100);
+      })
+      .catch((error) => {
+        console.error("PersonList: Failed to load fresh person data:", error);
+      });
   }, [loadPersons, persons.length, filteredPersons.length, applyPersonFilters, updatePersonFilters]);
 
   const totalPages = Math.ceil(filteredPersons.length / ITEMS_PER_PAGE);

@@ -42,7 +42,7 @@ const SelectPersonModal: React.FC<SelectPersonModalProps> = ({
 
     console.log("SelectPersonModal: Opening - ensuring clean person filter state");
     
-    // CRITICAL: Reset person filters when modal opens to prevent contamination
+    // CRITICAL: Reset person filters when modal opens AND force fresh API call
     const { updatePersonFilters, applyPersonFilters } = useStore.getState();
     updatePersonFilters({
       searchQuery: '',
@@ -51,44 +51,41 @@ const SelectPersonModal: React.FC<SelectPersonModalProps> = ({
     });
 
     const loadPersonsFromAPI = async () => {
-      // Only load if we don't have persons data or if it's stale
-      if (persons.length > 0) {
-        console.log("SelectPersonModal: Using existing persons data");
-        // Even with existing data, ensure filters are clean
-        setTimeout(() => {
-          applyPersonFilters();
-        }, 50);
-        return;
-      }
+      // ALWAYS force fresh API call - don't trust cached data
+      console.log("SelectPersonModal: FORCE FRESH API CALL for persons");
 
       setIsLoading(true);
       setError(null);
 
       try {
-        console.log("SelectPersonModal: Requesting persons from API...");
+        console.log("SelectPersonModal: Making fresh API request for all persons...");
 
         // Make direct API call to get all persons
         const personsFromAPI = await personAPI.getAll();
 
         console.log("SelectPersonModal: API response received:", {
           count: personsFromAPI.length,
-          persons: personsFromAPI,
+          firstFew: personsFromAPI.slice(0, 3).map(p => ({ id: p.id, name: p.name })),
         });
 
         // Only update if component is still mounted
         if (isMounted) {
-          // Update the store with the fetched persons
+          // Update the store with fresh API data
           setPersons(personsFromAPI);
-          applyPersonFilters(); // Apply clean filters after setting data
+          
+          // Apply clean filters to fresh data
+          setTimeout(() => {
+            applyPersonFilters();
+          }, 50);
 
           console.log(
-            "SelectPersonModal: Persons loaded successfully, count:",
+            "SelectPersonModal: Fresh persons loaded successfully, count:",
             personsFromAPI.length
           );
         }
       } catch (error) {
         console.error(
-          "SelectPersonModal: Failed to load persons from API:",
+          "SelectPersonModal: Failed to load fresh persons from API:",
           error
         );
         if (isMounted) {
@@ -107,7 +104,6 @@ const SelectPersonModal: React.FC<SelectPersonModalProps> = ({
     return () => {
       isMounted = false;
     };
-  }, []); // Empty dependency array to run only once when modal opens
 
   // Sort persons by most recently added (assuming newer IDs are more recent)
   const sortedPersons = [...persons].sort(
