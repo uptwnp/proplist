@@ -104,6 +104,7 @@ const SelectPersonModal: React.FC<SelectPersonModalProps> = ({
     return () => {
       isMounted = false;
     };
+  }, [setPersons]);
 
   // Sort persons by most recently added (assuming newer IDs are more recent)
   const sortedPersons = [...persons].sort(
