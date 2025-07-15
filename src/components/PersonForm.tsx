@@ -3,6 +3,7 @@ import { Person } from "../types";
 import { X, Loader2, Phone, User } from "lucide-react";
 import { useStore } from "../store/store";
 import { PERSON_ROLES, UI_TEXT } from "../constants";
+import { handlePhonePaste } from "../utils/phoneUtils";
 
 interface PersonFormProps {
   person?: Person;
@@ -123,6 +124,11 @@ const PersonForm: React.FC<PersonFormProps> = ({ person, onClose }) => {
               onChange={(e) =>
                 setFormData({ ...formData, phone: e.target.value })
               }
+              onPaste={(e) =>
+                handlePhonePaste(e.nativeEvent, (value) =>
+                  setFormData({ ...formData, phone: value })
+                )
+              }
               className="w-full border rounded-md p-2"
               placeholder={UI_TEXT.placeholders.person.phone}
               required
@@ -164,6 +170,14 @@ const PersonForm: React.FC<PersonFormProps> = ({ person, onClose }) => {
                   ...formData,
                   alternative_contact_details: e.target.value,
                 })
+              }
+              onPaste={(e) =>
+                handlePhonePaste(e.nativeEvent, (value) =>
+                  setFormData({
+                    ...formData,
+                    alternative_contact_details: value,
+                  })
+                )
               }
               className="w-full border rounded-md p-2"
               placeholder={UI_TEXT.placeholders.person.alternativeContact}

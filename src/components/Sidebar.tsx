@@ -3,6 +3,7 @@ import { Search, X, SlidersHorizontal, RefreshCw } from "lucide-react";
 import { useStore } from "../store/store";
 import PropertyList from "./PropertyList";
 import PersonList from "./PersonList";
+import { handlePhonePaste } from "../utils/phoneUtils";
 
 const Sidebar: React.FC = () => {
   const {
@@ -240,6 +241,11 @@ const Sidebar: React.FC = () => {
                   value={personFilters.searchQuery || ""}
                   onChange={(e) =>
                     updatePersonFilters({ searchQuery: e.target.value })
+                  }
+                  onPaste={(e) =>
+                    handlePhonePaste(e.nativeEvent, (value) =>
+                      updatePersonFilters({ searchQuery: value })
+                    )
                   }
                 />
                 <Search
