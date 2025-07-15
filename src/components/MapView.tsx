@@ -10,6 +10,7 @@ import maplibreGl from 'maplibre-gl';
 import { useStore } from '../store/store';
 import { Layers, Map as MapIcon, Home, Crosshair, MapPin, Eye, Store, Building2, Building, Wheat, Warehouse, Factory, Zap, IndianRupee, ExternalLink, Navigation, ShoppingBag, TreePine, Truck, Wrench, Landmark, LandPlot, Grid2x2 as Grid2x2Check } from 'lucide-react';
 import { Property } from '../types';
+import { useEffect } from 'react';
 import {
   DEFAULT_COORDINATES,
   PROPERTY_TYPE_COLORS,
@@ -148,6 +149,7 @@ const MapView: React.FC = () => {
   const onMapLoad = useCallback(
     (event: any) => {
       console.log('Map loaded, setting initial bounds from map.getBounds()');
+      
       const map = event.target;
 
       // Ensure map is properly loaded before getting bounds
@@ -158,6 +160,7 @@ const MapView: React.FC = () => {
           if (bounds && typeof bounds.getNorth === 'function') {
             // Use the store's bounds converter to ensure proper format
             setMapViewport({
+              ...mapViewport,
               bounds: bounds, // Let the store handle the conversion
             });
           }
@@ -188,12 +191,12 @@ const MapView: React.FC = () => {
       // Validate viewState before setting
       if (
         viewState &&
-        typeof viewState.latitude === 'number' &&
-        typeof viewState.longitude === 'number' &&
-        typeof viewState.zoom === 'number' &&
         !isNaN(viewState.latitude) &&
         !isNaN(viewState.longitude) &&
-        !isNaN(viewState.zoom)
+        !isNaN(viewState.zoom) &&
+        typeof viewState.latitude === 'number' &&
+        typeof viewState.longitude === 'number' &&
+        typeof viewState.zoom === 'number'
       ) {
         setMapViewport({
           latitude: viewState.latitude,
@@ -205,6 +208,28 @@ const MapView: React.FC = () => {
     },
     [setMapViewport]
   );
+
+  // Save viewport to localStorage whenever it changes
+  useEffect(() => {
+    if (
+      mapViewport && 
+      typeof mapViewport.latitude === 'number' && 
+      typeof mapViewport.longitude === 'number' && 
+      typeof mapViewport.zoom === 'number' &&
+      !isNaN(mapViewport.latitude) && 
+      !isNaN(mapViewport.longitude) && 
+      !isNaN(mapViewport.zoom)
+    ) {
+      const viewportToSave = {
+        latitude: mapViewport.latitude,
+        longitude: mapViewport.longitude,
+        zoom: mapViewport.zoom
+      };
+      
+      localStorage.setItem('mapViewport', JSON.stringify(viewportToSave));
+      console.log('Saved map viewport to localStorage:', viewportToSave);
+    }
+  }, [mapViewport.latitude, mapViewport.longitude, mapViewport.zoom]);
 
   const handleMapClick = useCallback(
     (event: any) => {
