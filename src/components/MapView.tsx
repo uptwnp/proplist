@@ -6,7 +6,10 @@ import {
   Home, 
   Layers, 
   MapIcon, 
+  Navigation,
   Crosshair,
+  Plus,
+  Minus
 } from 'lucide-react';
 import { MAP_CONFIG, DEFAULT_COORDINATES, PROPERTY_TYPE_COLORS } from '../constants';
 import circle from '@turf/circle';
@@ -167,15 +170,7 @@ const MapView: React.FC = () => {
         <NavigationControl position="bottom-right" />
 
         {/* Custom Controls */}
-        <div className="absolute top-4 left-4 bg-white rounded-md shadow-md p-1 flex flex-col gap-1">
-          <button 
-            onClick={() => setIsSatelliteView(!isSatelliteView)}
-            className="p-2 hover:bg-gray-100 rounded-md transition-colors"
-            title={isSatelliteView ? "Switch to Street View" : "Switch to Satellite View"}
-          >
-            {isSatelliteView ? <MapIcon size={20} /> : <Layers size={20} />}
-          </button>
-          
+        <div className="absolute bottom-4 left-4 bg-white rounded-md shadow-md p-1 flex flex-col gap-1">
           <button
             onClick={getCurrentLocation}
             className="p-2 hover:bg-gray-100 rounded-md transition-colors"
@@ -184,16 +179,44 @@ const MapView: React.FC = () => {
             <Crosshair size={20} />
           </button>
           
+          <button
+            onClick={centerOnDefault}
+            className={`p-2 rounded-md transition-colors ${
+              isAtDefaultLocation() 
+                ? 'bg-blue-100 text-blue-600 hover:bg-blue-200' 
+                : 'hover:bg-gray-100'
+            }`}
+            title="Center on Karnal"
+          >
+            <Home size={20} />
+          </button>
+          
+          <div className="border-t border-gray-200 my-1"></div>
+          
+          <button
+            onClick={zoomIn}
+            className="p-2 hover:bg-gray-100 rounded-md transition-colors"
+            title="Zoom in"
+            disabled={mapViewport.zoom >= MAP_CONFIG.maxZoom}
+          >
             <Plus size={20} />
           </button>
+          
+          <button
+            onClick={zoomOut}
+            className="p-2 hover:bg-gray-100 rounded-md transition-colors"
+            title="Zoom out"
+            disabled={mapViewport.zoom <= MAP_CONFIG.minZoom}
+          >
+            <Minus size={20} />
+          </button>
+        </div>
+
         {/* Property Markers */}
-        {filteredProperties.filter(property => {
-          // Only show properties with valid locations (not default coordinates)
-          return property.location && 
-                 (property.location.latitude !== DEFAULT_COORDINATES.latitude || 
-                  property.location.longitude !== DEFAULT_COORDINATES.longitude);
-        }).map((property) => {
-          if (!property.location) {
+        {filteredProperties.map((property) => {
+          if (!property.location || 
+              property.location.latitude === DEFAULT_COORDINATES.latitude && 
+              property.location.longitude === DEFAULT_COORDINATES.longitude) {
             return null;
           }
 
