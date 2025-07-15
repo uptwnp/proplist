@@ -13,6 +13,7 @@ const Sidebar: React.FC = () => {
     updateFilters,
     personFilters,
     updatePersonFilters,
+    resetPersonFilters,
     isMobileView,
     toggleFilterDrawer,
     activeTab,
@@ -40,6 +41,11 @@ const Sidebar: React.FC = () => {
       } else if (activeTab === "persons" && !hasLoadedPersons.current) {
         console.log("Sidebar: Loading persons for persons tab (first time)");
         hasLoadedPersons.current = true;
+        
+        // FIXED: Reset person filters when switching to persons tab
+        console.log("Sidebar: Resetting person filters for clean slate...");
+        resetPersonFilters();
+        
         // Load persons data and ensure filters are applied
         loadPersons()
           .then(() => {
@@ -59,9 +65,23 @@ const Sidebar: React.FC = () => {
     activeTab,
     loadProperties,
     loadPersons,
+    resetPersonFilters,
     applyPersonFilters,
   ]);
 
+  // FIXED: Reset person filters whenever switching to persons tab (even if already loaded)
+  useEffect(() => {
+    if (isSidebarOpen && activeTab === "persons") {
+      console.log("Sidebar: Active tab is persons, ensuring clean filter state...");
+      // Reset filters to ensure we show all persons, not filtered by previous context
+      resetPersonFilters();
+      
+      // Apply filters after a small delay to ensure state is updated
+      setTimeout(() => {
+        applyPersonFilters();
+      }, 50);
+    }
+  }, [activeTab, isSidebarOpen, resetPersonFilters, applyPersonFilters]);
   // Reset load flags when data is refreshed
   useEffect(() => {
     if (lastSyncTime) {
