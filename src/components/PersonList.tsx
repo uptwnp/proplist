@@ -388,6 +388,5 @@ const PersonList: React.FC = () => {
       />
     </>
   );
-};
 
 export default PersonList;
