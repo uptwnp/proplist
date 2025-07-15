@@ -47,19 +47,26 @@ const PersonList: React.FC = () => {
       filteredPersonsCount: filteredPersons.length,
     });
 
+    // CRITICAL: Always reset filters when PersonList mounts to ensure clean state
+    console.log("PersonList: Resetting filters to show ALL persons");
+    resetPersonFilters();
+    
+    // Then load data if needed
     if (persons.length === 0) {
-      console.log("PersonList: No persons data, loading...");
-      loadPersons().catch((error) => {
-        console.error("Failed to load persons:", error);
-      });
-    } else if (filteredPersons.length === 0 && persons.length > 0) {
-      // If we have persons but no filtered persons, apply filters
-      console.log(
-        "PersonList: Have persons but no filtered persons, applying filters..."
-      );
-      applyPersonFilters();
+      console.log("PersonList: Loading persons data...");
+      loadPersons()
+        .then(() => {
+          console.log("PersonList: Data loaded, applying clean filters");
+          setTimeout(() => applyPersonFilters(), 50);
+        })
+        .catch((error) => {
+          console.error("Failed to load persons:", error);
+        });
+    } else {
+      // If we have data, just apply the clean filters
+      console.log("PersonList: Data exists, applying clean filters");
+      setTimeout(() => applyPersonFilters(), 50);
     }
-  }, [loadPersons, persons.length, filteredPersons.length, applyPersonFilters]);
 
   // FIXED: Reset current page when filters change
   useEffect(() => {

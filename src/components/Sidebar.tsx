@@ -42,18 +42,15 @@ const Sidebar: React.FC = () => {
         console.log("Sidebar: Loading persons for persons tab (first time)");
         hasLoadedPersons.current = true;
         
-        // FIXED: Reset person filters when switching to persons tab
-        console.log("Sidebar: Resetting person filters for clean slate...");
-        resetPersonFilters();
-        
         // Load persons data and ensure filters are applied
         loadPersons()
           .then(() => {
-            console.log("Sidebar: Persons loaded, applying filters...");
-            // Small delay to ensure state is updated
+            console.log("Sidebar: Persons loaded, resetting filters and applying...");
+            // Reset filters first, then apply them
+            resetPersonFilters();
             setTimeout(() => {
               applyPersonFilters();
-            }, 100);
+            }, 50);
           })
           .catch((error) => {
             console.error("Failed to load persons:", error);
@@ -69,17 +66,19 @@ const Sidebar: React.FC = () => {
     applyPersonFilters,
   ]);
 
-  // FIXED: Reset person filters whenever switching to persons tab (even if already loaded)
+  // CRITICAL FIX: Always reset person filters when switching to persons tab
   useEffect(() => {
     if (isSidebarOpen && activeTab === "persons") {
-      console.log("Sidebar: Active tab is persons, ensuring clean filter state...");
-      // Reset filters to ensure we show all persons, not filtered by previous context
+      console.log("Sidebar: Switching to persons tab - FORCE RESET filters to show ALL persons");
+      
+      // Force reset filters to default state
       resetPersonFilters();
       
-      // Apply filters after a small delay to ensure state is updated
+      // Apply clean filters after reset
       setTimeout(() => {
+        console.log("Sidebar: Applying clean filters after reset");
         applyPersonFilters();
-      }, 50);
+      }, 100);
     }
   }, [activeTab, isSidebarOpen, resetPersonFilters, applyPersonFilters]);
   // Reset load flags when data is refreshed

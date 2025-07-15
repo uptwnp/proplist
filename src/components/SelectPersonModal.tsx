@@ -44,6 +44,10 @@ const SelectPersonModal: React.FC<SelectPersonModalProps> = ({
       // Only load if we don't have persons data or if it's stale
       if (persons.length > 0) {
         console.log("SelectPersonModal: Using existing persons data");
+        // Even with existing data, ensure we're not filtering by property context
+        console.log("SelectPersonModal: Resetting person filters to show all persons");
+        resetPersonFilters();
+        setTimeout(() => applyPersonFilters(), 50);
         return;
       }
 
@@ -65,6 +69,10 @@ const SelectPersonModal: React.FC<SelectPersonModalProps> = ({
         if (isMounted) {
           // Update the store with the fetched persons
           setPersons(personsFromAPI);
+          
+          // Reset filters to ensure clean state
+          resetPersonFilters();
+          setTimeout(() => applyPersonFilters(), 50);
 
           console.log(
             "SelectPersonModal: Persons loaded successfully, count:",
