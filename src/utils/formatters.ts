@@ -64,3 +64,17 @@ const formatNumber = (num: number): string => {
   }
   return num.toString();
 };
+
+/**
+ * Format square yards for display in filters
+ * @param value - Value in square yards
+ * @returns Formatted string
+ */
+export const formatSquareYards = (value: number): string => {
+  if (value >= 100000) {
+    return `${(value / 100000).toFixed(0)}L`;
+  } else if (value >= 1000) {
+    return `${(value / 1000).toFixed(0)}K`;
+  }
+  return value.toString();
+};

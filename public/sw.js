@@ -1,32 +1,32 @@
-const CACHE_NAME = "my-properties-v2"; // Updated version to force cache refresh
+const CACHE_NAME = 'my-properties-v2'; // Updated version to force cache refresh
 const urlsToCache = [
-  "/",
-  "/manifest.json",
-  "/icons/icon-192.png",
-  "/icons/icon-512.png",
+  '/',
+  '/manifest.json',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
 ];
 
 // Install event - force update
-self.addEventListener("install", (event) => {
-  console.log("SW: Installing new version");
+self.addEventListener('install', (event) => {
+  console.log('SW: Installing new version');
   self.skipWaiting(); // Force activation of new service worker
 
   event.waitUntil(
     caches
       .open(CACHE_NAME)
       .then((cache) => {
-        console.log("SW: Opened cache");
+        console.log('SW: Opened cache');
         return cache.addAll(urlsToCache);
       })
       .catch((error) => {
-        console.log("SW: Cache install failed:", error);
+        console.log('SW: Cache install failed:', error);
       })
   );
 });
 
 // Activate event - clean old caches
-self.addEventListener("activate", (event) => {
-  console.log("SW: Activating new version");
+self.addEventListener('activate', (event) => {
+  console.log('SW: Activating new version');
 
   event.waitUntil(
     Promise.all([
@@ -37,7 +37,7 @@ self.addEventListener("activate", (event) => {
         return Promise.all(
           cacheNames.map((cacheName) => {
             if (cacheName !== CACHE_NAME) {
-              console.log("SW: Deleting old cache:", cacheName);
+              console.log('SW: Deleting old cache:', cacheName);
               return caches.delete(cacheName);
             }
           })
@@ -48,11 +48,11 @@ self.addEventListener("activate", (event) => {
 });
 
 // Fetch event - network first for JS/CSS, cache first for others
-self.addEventListener("fetch", (event) => {
+self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
   // Skip non-GET requests
-  if (event.request.method !== "GET") {
+  if (event.request.method !== 'GET') {
     return;
   }
 
@@ -63,9 +63,9 @@ self.addEventListener("fetch", (event) => {
 
   // Network first strategy for JS/CSS files to avoid stale module issues
   if (
-    url.pathname.endsWith(".js") ||
-    url.pathname.endsWith(".css") ||
-    url.pathname.includes("assets/")
+    url.pathname.endsWith('.js') ||
+    url.pathname.endsWith('.css') ||
+    url.pathname.includes('assets/')
   ) {
     event.respondWith(
       fetch(event.request)
@@ -109,8 +109,8 @@ self.addEventListener("fetch", (event) => {
       })
       .catch(() => {
         // Return offline page for navigation requests
-        if (event.request.mode === "navigate") {
-          return caches.match("/");
+        if (event.request.mode === 'navigate') {
+          return caches.match('/');
         }
       })
   );

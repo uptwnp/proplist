@@ -20,6 +20,7 @@ import { formatCurrency } from '../utils/formatters';
 import { formatRatePerGaj } from '../utils/formatters';
 import ConfirmationModal from './ConfirmationModal';
 import LocationUpdateModal from './LocationUpdateModal';
+import HiddenLogoutButton from './HiddenLogoutButton';
 import { DEFAULT_COORDINATES, ITEMS_PER_PAGE } from '../constants';
 
 const PropertyList: React.FC = () => {
@@ -210,6 +211,7 @@ const PropertyList: React.FC = () => {
                   >
                     Refresh Filters
                   </button>
+                  <HiddenLogoutButton show={true} />
                 </>
               )}
             </div>

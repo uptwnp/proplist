@@ -8,11 +8,14 @@ import MobileFilterDrawer from "./components/MobileFilterDrawer";
 import FilterModal from "./components/FilterModal";
 import PropertyForm from "./components/PropertyForm";
 import PersonForm from "./components/PersonForm";
+import LoginScreen from "./components/LoginScreen";
 import { useStore } from "./store/store";
 import { APP_VERSION } from "./constants";
 
 function App() {
   const {
+    isAuthenticated,
+    checkAuth,
     isSidebarOpen,
     isMobileView,
     setMobileView,
@@ -36,6 +39,18 @@ function App() {
   const hasInitialized = useRef(false);
   const isInitializing = useRef(false);
 
+  // Check authentication on app start and periodically
+  useEffect(() => {
+    // Initial auth check
+    checkAuth();
+    
+    // Check auth every minute to handle session expiration
+    const authCheckInterval = setInterval(() => {
+      checkAuth();
+    }, 60000); // Check every minute
+    
+    return () => clearInterval(authCheckInterval);
+  }, [checkAuth]);
   // Version management for cache clearing
   useEffect(() => {
     const storedVersion = localStorage.getItem("app_version");
@@ -137,6 +152,10 @@ function App() {
     return () => clearInterval(refreshInterval);
   }, [lastSyncTime, refreshData]);
 
+  // Show login screen if not authenticated
+  if (!isAuthenticated) {
+    return <LoginScreen />;
+  }
   // Show loading state only for initial load when no cache is available
   if ((isLoading || isLoadingFromCache) && !hasInitialized.current) {
     return (

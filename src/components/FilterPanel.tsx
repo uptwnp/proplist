@@ -11,7 +11,7 @@ import {
   MapPin,
   Target,
 } from 'lucide-react';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, formatSquareYards } from '../utils/formatters';
 import {
   PROPERTY_TYPES,
   PROPERTY_ZONES,
@@ -296,47 +296,9 @@ const FilterPanel: React.FC = () => {
         </button>
       </div>
 
-      {/* 1. Sort By */}
-      <div>
-        <h4 className="text-sm font-medium mb-2">{UI_TEXT.labels.sortBy}</h4>
-        <select
-          value={filters.sortBy}
-          onChange={(e) => updateFilters({ sortBy: e.target.value as any })}
-          className="w-full border rounded-md p-2 text-sm"
-        >
-          {SORT_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </div>
+ 
 
-      {/* 2. Zone Filter */}
-      <div>
-        <h4 className="text-sm font-medium mb-2">
-          {UI_TEXT.labels.zone}
-          {filters.zone && (
-            <span className="ml-2 bg-purple-100 text-purple-800 text-xs px-2 py-0.5 rounded-full">
-              Selected
-            </span>
-          )}
-        </h4>
-        <select
-          value={filters.zone || ''}
-          onChange={(e) => handleZoneChange(e.target.value)}
-          className="w-full border rounded-md p-2 text-sm"
-        >
-          <option value="">All Zones</option>
-          {PROPERTY_ZONES.map((zone) => (
-            <option key={zone} value={zone}>
-              {zone}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* 3. Area Filter with Suggestions */}
+      {/* 2. Area Filter with Suggestions */}
       <div className="relative">
         <h4 className="text-sm font-medium mb-2">
           {UI_TEXT.labels.area}
@@ -421,7 +383,7 @@ const FilterPanel: React.FC = () => {
         )}
       </div>
 
-      {/* 4. Property Type */}
+      {/* 3. Property Type */}
       <div>
         <h4 className="text-sm font-medium mb-2">
           {UI_TEXT.labels.propertyTypes}
@@ -444,7 +406,7 @@ const FilterPanel: React.FC = () => {
         </div>
       </div>
 
-      {/* 5. Price Range - Multiple Selection */}
+      {/* 4. Price Range - Multiple Selection */}
       <div>
         <h4 className="text-sm font-medium mb-2">
           {UI_TEXT.labels.priceRange}
@@ -465,14 +427,13 @@ const FilterPanel: React.FC = () => {
               }`}
               onClick={() => handlePriceRangeToggle(range)}
             >
-              {formatCurrency(range[0])} -{' '}
-              {range[1] === 100000000 ? '5+ Cr' : formatCurrency(range[1])}
+              {formatCurrency(range[0])} - {formatCurrency(range[1])}
             </button>
           ))}
         </div>
       </div>
 
-      {/* 6. Size Range - Multiple Selection (Collapsed) */}
+      {/* 5. Size Range - Multiple Selection (Expanded by default) */}
       <div>
         <div className="flex items-center justify-between mb-2">
           <h4 className="text-sm font-medium">
@@ -507,12 +468,49 @@ const FilterPanel: React.FC = () => {
                 }`}
                 onClick={() => handleSizeRangeToggle(range)}
               >
-                {Math.round(range[0] / 9)} -{' '}
-                {range[1] === 10000 ? '1000+' : Math.round(range[1] / 9)} yd
+                {formatSquareYards(range[0])} - {formatSquareYards(range[1])} sq.yd
               </button>
             ))}
           </div>
         )}
+      </div>
+     {/* 1. Sort By */}
+      <div>
+        <h4 className="text-sm font-medium mb-2">{UI_TEXT.labels.sortBy}</h4>
+        <select
+          value={filters.sortBy}
+          onChange={(e) => updateFilters({ sortBy: e.target.value as any })}
+          className="w-full border rounded-md p-2 text-sm"
+        >
+          {SORT_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      {/* 6. Zone Filter */}
+      <div>
+        <h4 className="text-sm font-medium mb-2">
+          {UI_TEXT.labels.zone}
+          {filters.zone && (
+            <span className="ml-2 bg-purple-100 text-purple-800 text-xs px-2 py-0.5 rounded-full">
+              Selected
+            </span>
+          )}
+        </h4>
+        <select
+          value={filters.zone || ''}
+          onChange={(e) => handleZoneChange(e.target.value)}
+          className="w-full border rounded-md p-2 text-sm"
+        >
+          <option value="">All Zones</option>
+          {PROPERTY_ZONES.map((zone) => (
+            <option key={zone} value={zone}>
+              {zone}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* 7. Rating (Collapsed) */}
