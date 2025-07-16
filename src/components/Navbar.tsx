@@ -16,7 +16,7 @@ const Navbar: React.FC = () => {
   } = useStore();
 
   const handleLogout = () => {
-    if (confirm('Are you sure you want to logout?')) {
+    if (confirm("Are you sure you want to logout?")) {
       logout();
     }
   };
@@ -74,13 +74,10 @@ const Navbar: React.FC = () => {
               Add {activeTab === "properties" ? "Property" : "Person"}
             </span>
           </button>
-          
+
           {/* Session info and logout - only show on desktop */}
           {!isMobileView && (
             <div className="flex items-center space-x-2">
-              <div className="text-xs text-gray-500 hidden lg:block">
-                Session: {authUtils.formatRemainingTime()}
-              </div>
               <button
                 onClick={handleLogout}
                 className="flex items-center space-x-1 px-2 py-1.5 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
