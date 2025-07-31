@@ -224,7 +224,7 @@ export const RADIUS_STEPS = [
 export const ITEMS_PER_PAGE = 40;
 
 // App Version for cache management
-export const APP_VERSION = "2.1.1";
+export const APP_VERSION = "2.1.2";
 
 // Map Configuration with zoom limits
 export const MAP_CONFIG = {

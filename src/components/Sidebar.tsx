@@ -5,6 +5,35 @@ import PropertyList from "./PropertyList";
 import PersonList from "./PersonList";
 import { handlePhonePaste } from "../utils/phoneUtils";
 
+// Cache keys for search terms
+const SEARCH_CACHE_KEYS = {
+  propertySearch: "cached_property_search",
+  personSearch: "cached_person_search",
+};
+
+// Load saved search term
+const loadSavedSearchTerm = (key: string): string => {
+  try {
+    const saved = localStorage.getItem(key);
+    return saved || "";
+  } catch (error) {
+    console.error("Error loading saved search term:", error);
+    return "";
+  }
+};
+
+// Save search term
+const saveSearchTerm = (key: string, term: string) => {
+  try {
+    if (term.trim()) {
+      localStorage.setItem(key, term);
+    } else {
+      localStorage.removeItem(key);
+    }
+  } catch (error) {
+    console.error("Error saving search term:", error);
+  }
+};
 const Sidebar: React.FC = () => {
   const {
     isSidebarOpen,
@@ -29,12 +58,59 @@ const Sidebar: React.FC = () => {
   // Use ref to prevent duplicate loads
   const hasLoadedProperties = useRef(false);
   const hasLoadedPersons = useRef(false);
+  const isInitialized = useRef(false);
+
+  // Initialize search terms from localStorage only once
+  useEffect(() => {
+    if (!isInitialized.current) {
+      isInitialized.current = true;
+
+      // Initialize property search if on properties tab
+      if (activeTab === "properties") {
+        const savedSearch = loadSavedSearchTerm(
+          SEARCH_CACHE_KEYS.propertySearch
+        );
+        if (savedSearch && savedSearch !== filters.searchQuery) {
+          updateFilters({ searchQuery: savedSearch });
+        }
+      }
+
+      // Initialize person search if on persons tab
+      if (activeTab === "persons") {
+        const savedSearch = loadSavedSearchTerm(SEARCH_CACHE_KEYS.personSearch);
+        if (savedSearch && savedSearch !== personFilters.searchQuery) {
+          updatePersonFilters({ searchQuery: savedSearch });
+        }
+      }
+    }
+  }, []); // Empty dependency array - run only once
+
+  // Save search terms when they change
+  useEffect(() => {
+    if (activeTab === "properties" && isInitialized.current) {
+      saveSearchTerm(
+        SEARCH_CACHE_KEYS.propertySearch,
+        filters.searchQuery || ""
+      );
+    }
+  }, [filters.searchQuery, activeTab]);
+
+  useEffect(() => {
+    if (activeTab === "persons" && isInitialized.current) {
+      saveSearchTerm(
+        SEARCH_CACHE_KEYS.personSearch,
+        personFilters.searchQuery || ""
+      );
+    }
+  }, [personFilters.searchQuery, activeTab]);
 
   // Load data when sidebar opens or tab changes - FIXED: Prevent duplicate loads
   useEffect(() => {
     if (isSidebarOpen) {
       if (activeTab === "properties" && !hasLoadedProperties.current) {
-        console.log("Sidebar: Loading properties for properties tab (first time)");
+        console.log(
+          "Sidebar: Loading properties for properties tab (first time)"
+        );
         hasLoadedProperties.current = true;
         loadProperties(); // This now has built-in deduplication
       } else if (activeTab === "persons" && !hasLoadedPersons.current) {
@@ -188,6 +264,11 @@ const Sidebar: React.FC = () => {
                   onChange={(e) =>
                     updateFilters({ searchQuery: e.target.value })
                   }
+                  title={
+                    filters.searchQuery
+                      ? `Current search: ${filters.searchQuery}`
+                      : "Search properties, persons, connections..."
+                  }
                 />
                 <Search
                   size={18}
@@ -246,6 +327,11 @@ const Sidebar: React.FC = () => {
                     handlePhonePaste(e.nativeEvent, (value) =>
                       updatePersonFilters({ searchQuery: value })
                     )
+                  }
+                  title={
+                    personFilters.searchQuery
+                      ? `Current search: ${personFilters.searchQuery}`
+                      : "Search persons by name, phone, role..."
                   }
                 />
                 <Search

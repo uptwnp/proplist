@@ -19,6 +19,32 @@ import { formatCurrency } from "../utils/formatters";
 import { personAPI } from "../utils/api";
 import { handlePhonePaste } from "../utils/phoneUtils";
 
+// Cache key for person search in modal
+const PERSON_MODAL_SEARCH_KEY = "cached_person_modal_search";
+
+// Load saved search term for modal
+const loadModalSearchTerm = (): string => {
+  try {
+    const saved = localStorage.getItem(PERSON_MODAL_SEARCH_KEY);
+    return saved || "";
+  } catch (error) {
+    console.error("Error loading modal search term:", error);
+    return "";
+  }
+};
+
+// Save search term for modal
+const saveModalSearchTerm = (term: string) => {
+  try {
+    if (term.trim()) {
+      localStorage.setItem(PERSON_MODAL_SEARCH_KEY, term);
+    } else {
+      localStorage.removeItem(PERSON_MODAL_SEARCH_KEY);
+    }
+  } catch (error) {
+    console.error("Error saving modal search term:", error);
+  }
+};
 interface SelectPersonModalProps {
   propertyId: number;
   onClose: () => void;
@@ -30,7 +56,7 @@ const SelectPersonModal: React.FC<SelectPersonModalProps> = ({
 }) => {
   const { persons, setPersons, connections, properties, isMobileView } =
     useStore();
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(() => loadModalSearchTerm());
   const [showAddPerson, setShowAddPerson] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -91,8 +117,19 @@ const SelectPersonModal: React.FC<SelectPersonModalProps> = ({
     // Cleanup function
     return () => {
       isMounted = false;
+      // Save search term when modal closes
+      saveModalSearchTerm(searchQuery);
     };
-  }, []); // Empty dependency array to run only once when modal opens
+  }, [searchQuery]); // Include searchQuery to save it when component unmounts
+
+  // Save search term when it changes
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      saveModalSearchTerm(searchQuery);
+    }, 500); // Debounce saving
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery]);
 
   // Sort persons by most recently added (assuming newer IDs are more recent)
   const sortedPersons = [...persons].sort(
@@ -113,7 +150,7 @@ const SelectPersonModal: React.FC<SelectPersonModalProps> = ({
     const personConnections = connections.filter(
       (conn) => conn.person_id === personId
     );
-    
+
     return personConnections
       .map((conn) => {
         const property = properties.find(
@@ -121,7 +158,9 @@ const SelectPersonModal: React.FC<SelectPersonModalProps> = ({
         );
         return property ? { property, connection: conn } : null;
       })
-      .filter((item): item is { property: any; connection: any } => item !== null);
+      .filter(
+        (item): item is { property: any; connection: any } => item !== null
+      );
   };
 
   const copyToClipboard = (text: string) => {
@@ -192,6 +231,11 @@ const SelectPersonModal: React.FC<SelectPersonModalProps> = ({
                 }
                 className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 disabled={isLoading}
+                title={
+                  searchQuery
+                    ? `Current search: ${searchQuery}`
+                    : "Search by name, phone, role, or about..."
+                }
               />
               <Search
                 size={18}
@@ -391,8 +435,9 @@ const SelectPersonModal: React.FC<SelectPersonModalProps> = ({
                             Connected Properties:
                           </h4>
                           <div className="space-y-1 max-h-24 overflow-y-auto">
-                            {connectedProperties.slice(0, 2).map(
-                              ({ property, connection }) => (
+                            {connectedProperties
+                              .slice(0, 2)
+                              .map(({ property, connection }) => (
                                 <div
                                   key={property.id}
                                   className="bg-blue-50 p-2 rounded text-xs"
@@ -422,8 +467,7 @@ const SelectPersonModal: React.FC<SelectPersonModalProps> = ({
                                     </div>
                                   </div>
                                 </div>
-                              )
-                            )}
+                              ))}
                             {connectedProperties.length > 2 && (
                               <div className="text-xs text-gray-500 text-center py-1">
                                 +{connectedProperties.length - 2} more

@@ -1,5 +1,5 @@
-import React, { useState, useRef, useCallback } from 'react';
-import { useStore } from '../store/store';
+import React, { useState, useRef, useCallback, useEffect } from "react";
+import { useStore } from "../store/store";
 import {
   X,
   Check,
@@ -10,8 +10,8 @@ import {
   Minus,
   MapPin,
   Target,
-} from 'lucide-react';
-import { formatCurrency, formatSquareYards } from '../utils/formatters';
+} from "lucide-react";
+import { formatCurrency, formatSquareYards } from "../utils/formatters";
 import {
   PROPERTY_TYPES,
   PROPERTY_ZONES,
@@ -22,12 +22,13 @@ import {
   RATING_OPTIONS,
   SORT_OPTIONS,
   DEFAULT_COORDINATES,
-} from '../constants';
+} from "../constants";
 
 const FilterPanel: React.FC = () => {
-  const { filters, updateFilters, resetFilters, getAllTags, properties } = useStore();
-  const [tagSearchQuery, setTagSearchQuery] = useState('');
-  const [excludeTagSearchQuery, setExcludeTagSearchQuery] = useState('');
+  const { filters, updateFilters, resetFilters, getAllTags, properties } =
+    useStore();
+  const [tagSearchQuery, setTagSearchQuery] = useState("");
+  const [excludeTagSearchQuery, setExcludeTagSearchQuery] = useState("");
   const [showIncludeTags, setShowIncludeTags] = useState(false);
   const [showExcludeTags, setShowExcludeTags] = useState(false);
   const [showSizeRange, setShowSizeRange] = useState(false);
@@ -35,9 +36,10 @@ const FilterPanel: React.FC = () => {
   const [showRadiusRange, setShowRadiusRange] = useState(false);
 
   // Area filter states
-  const [areaSearchQuery, setAreaSearchQuery] = useState('');
+  const [areaSearchQuery, setAreaSearchQuery] = useState("");
   const [showAreaSuggestions, setShowAreaSuggestions] = useState(false);
-  const [selectedAreaSuggestionIndex, setSelectedAreaSuggestionIndex] = useState(-1);
+  const [selectedAreaSuggestionIndex, setSelectedAreaSuggestionIndex] =
+    useState(-1);
   const areaInputRef = useRef<HTMLInputElement>(null);
 
   const allTags = getAllTags();
@@ -45,26 +47,29 @@ const FilterPanel: React.FC = () => {
   // Get unique areas from all properties
   const getUniqueAreas = useCallback(() => {
     const areas = properties
-      .map(p => p.area)
-      .filter(area => area && area.trim() !== '')
-      .map(area => area!.trim());
-    
+      .map((p) => p.area)
+      .filter((area) => area && area.trim() !== "")
+      .map((area) => area!.trim());
+
     return Array.from(new Set(areas)).sort();
   }, [properties]);
 
   // Filter area suggestions based on input
-  const filterAreaSuggestions = useCallback((input: string) => {
-    if (!input.trim()) {
-      return getUniqueAreas().slice(0, 10);
-    }
+  const filterAreaSuggestions = useCallback(
+    (input: string) => {
+      if (!input.trim()) {
+        return getUniqueAreas().slice(0, 10);
+      }
 
-    const uniqueAreas = getUniqueAreas();
-    const filtered = uniqueAreas.filter(area =>
-      area.toLowerCase().includes(input.toLowerCase())
-    );
+      const uniqueAreas = getUniqueAreas();
+      const filtered = uniqueAreas.filter((area) =>
+        area.toLowerCase().includes(input.toLowerCase())
+      );
 
-    return filtered.slice(0, 10);
-  }, [getUniqueAreas]);
+      return filtered.slice(0, 10);
+    },
+    [getUniqueAreas]
+  );
 
   const handlePropertyTypeToggle = (type: (typeof PROPERTY_TYPES)[number]) => {
     const currentTypes = [...filters.propertyTypes];
@@ -89,10 +94,34 @@ const FilterPanel: React.FC = () => {
     updateFilters({ area: area.trim() || undefined });
   };
 
+  // Save area filter to localStorage when it changes
+  useEffect(() => {
+    if (filters.area) {
+      try {
+        localStorage.setItem("cached_area_filter", filters.area);
+      } catch (error) {
+        console.error("Error saving area filter:", error);
+      }
+    } else {
+      try {
+        localStorage.removeItem("cached_area_filter");
+      } catch (error) {
+        console.error("Error removing area filter:", error);
+      }
+    }
+  }, [filters.area]);
+
+  // Initialize area search query from saved filter
+  useEffect(() => {
+    if (filters.area && !areaSearchQuery) {
+      setAreaSearchQuery(filters.area);
+    }
+  }, [filters.area, areaSearchQuery]);
+
   // Handle area input change
   const handleAreaSearchChange = (value: string) => {
     setAreaSearchQuery(value);
-    
+
     if (value.trim()) {
       const suggestions = filterAreaSuggestions(value);
       setShowAreaSuggestions(suggestions.length > 0);
@@ -120,9 +149,9 @@ const FilterPanel: React.FC = () => {
   // Handle area keyboard navigation
   const handleAreaKeyDown = (e: React.KeyboardEvent) => {
     const suggestions = filterAreaSuggestions(areaSearchQuery);
-    
+
     if (!showAreaSuggestions || suggestions.length === 0) {
-      if (e.key === 'Enter') {
+      if (e.key === "Enter") {
         e.preventDefault();
         handleAreaFilterChange(areaSearchQuery);
         setShowAreaSuggestions(false);
@@ -131,19 +160,19 @@ const FilterPanel: React.FC = () => {
     }
 
     switch (e.key) {
-      case 'ArrowDown':
+      case "ArrowDown":
         e.preventDefault();
-        setSelectedAreaSuggestionIndex(prev => 
+        setSelectedAreaSuggestionIndex((prev) =>
           prev < suggestions.length - 1 ? prev + 1 : 0
         );
         break;
-      case 'ArrowUp':
+      case "ArrowUp":
         e.preventDefault();
-        setSelectedAreaSuggestionIndex(prev => 
+        setSelectedAreaSuggestionIndex((prev) =>
           prev > 0 ? prev - 1 : suggestions.length - 1
         );
         break;
-      case 'Enter':
+      case "Enter":
         e.preventDefault();
         if (selectedAreaSuggestionIndex >= 0) {
           const selectedArea = suggestions[selectedAreaSuggestionIndex];
@@ -155,7 +184,7 @@ const FilterPanel: React.FC = () => {
         setShowAreaSuggestions(false);
         setSelectedAreaSuggestionIndex(-1);
         break;
-      case 'Escape':
+      case "Escape":
         setShowAreaSuggestions(false);
         setSelectedAreaSuggestionIndex(-1);
         areaInputRef.current?.blur();
@@ -248,12 +277,13 @@ const FilterPanel: React.FC = () => {
   // Calculate location statistics
   const locationStats = React.useMemo(() => {
     const total = properties.length;
-    const withLocation = properties.filter(p => 
-      p.location.latitude !== DEFAULT_COORDINATES.latitude ||
-      p.location.longitude !== DEFAULT_COORDINATES.longitude
+    const withLocation = properties.filter(
+      (p) =>
+        p.location.latitude !== DEFAULT_COORDINATES.latitude ||
+        p.location.longitude !== DEFAULT_COORDINATES.longitude
     ).length;
     const withoutLocation = total - withLocation;
-    
+
     return { total, withLocation, withoutLocation };
   }, [properties]);
 
@@ -276,12 +306,16 @@ const FilterPanel: React.FC = () => {
 
   // Check if a price range is selected
   const isPriceRangeSelected = (range: [number, number]) => {
-    return filters.priceRanges.some(([min, max]) => min === range[0] && max === range[1]);
+    return filters.priceRanges.some(
+      ([min, max]) => min === range[0] && max === range[1]
+    );
   };
 
   // Check if a size range is selected
   const isSizeRangeSelected = (range: [number, number]) => {
-    return filters.sizeRanges.some(([min, max]) => min === range[0] && max === range[1]);
+    return filters.sizeRanges.some(
+      ([min, max]) => min === range[0] && max === range[1]
+    );
   };
 
   return (
@@ -295,8 +329,6 @@ const FilterPanel: React.FC = () => {
           {UI_TEXT.buttons.reset}
         </button>
       </div>
-
- 
 
       {/* 2. Area Filter with Suggestions */}
       <div className="relative">
@@ -319,15 +351,23 @@ const FilterPanel: React.FC = () => {
             onKeyDown={handleAreaKeyDown}
             className="w-full border rounded-md p-2 pr-8 text-sm"
             placeholder="Search or type area name..."
+            title={
+              filters.area
+                ? `Current area filter: ${filters.area}`
+                : "Search or type area name..."
+            }
           />
-          <MapPin size={16} className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400" />
-          
+          <MapPin
+            size={16}
+            className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400"
+          />
+
           {/* Clear area filter button */}
           {filters.area && (
             <button
               onClick={() => {
-                setAreaSearchQuery('');
-                handleAreaFilterChange('');
+                setAreaSearchQuery("");
+                handleAreaFilterChange("");
               }}
               className="absolute right-8 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
               title="Clear area filter"
@@ -346,7 +386,9 @@ const FilterPanel: React.FC = () => {
                 type="button"
                 onClick={() => handleAreaSuggestionClick(suggestion)}
                 className={`w-full text-left px-3 py-2 hover:bg-gray-100 transition-colors ${
-                  index === selectedAreaSuggestionIndex ? 'bg-blue-50 text-blue-700' : 'text-gray-900'
+                  index === selectedAreaSuggestionIndex
+                    ? "bg-blue-50 text-blue-700"
+                    : "text-gray-900"
                 }`}
               >
                 <div className="flex items-center space-x-2">
@@ -355,11 +397,12 @@ const FilterPanel: React.FC = () => {
                 </div>
               </button>
             ))}
-            {filterAreaSuggestions(areaSearchQuery).length === 0 && areaSearchQuery && (
-              <div className="px-3 py-2 text-gray-500 text-sm">
-                Press Enter to filter by "{areaSearchQuery}"
-              </div>
-            )}
+            {filterAreaSuggestions(areaSearchQuery).length === 0 &&
+              areaSearchQuery && (
+                <div className="px-3 py-2 text-gray-500 text-sm">
+                  Press Enter to filter by "{areaSearchQuery}"
+                </div>
+              )}
           </div>
         )}
 
@@ -371,8 +414,8 @@ const FilterPanel: React.FC = () => {
               {filters.area}
               <button
                 onClick={() => {
-                  setAreaSearchQuery('');
-                  handleAreaFilterChange('');
+                  setAreaSearchQuery("");
+                  handleAreaFilterChange("");
                 }}
                 className="ml-1 hover:text-orange-900"
               >
@@ -394,8 +437,8 @@ const FilterPanel: React.FC = () => {
               key={type}
               className={`flex items-center w-full px-3 py-1.5 text-sm rounded-md border ${
                 filters.propertyTypes.includes(type)
-                  ? 'bg-blue-50 border-blue-300 text-blue-700'
-                  : 'border-gray-300 hover:bg-gray-50'
+                  ? "bg-blue-50 border-blue-300 text-blue-700"
+                  : "border-gray-300 hover:bg-gray-50"
               }`}
               onClick={() => handlePropertyTypeToggle(type)}
             >
@@ -422,8 +465,8 @@ const FilterPanel: React.FC = () => {
               key={index}
               className={`px-3 py-1.5 text-sm rounded-md border ${
                 isPriceRangeSelected(range)
-                  ? 'bg-blue-50 border-blue-300 text-blue-700'
-                  : 'border-gray-300 hover:bg-gray-50'
+                  ? "bg-blue-50 border-blue-300 text-blue-700"
+                  : "border-gray-300 hover:bg-gray-50"
               }`}
               onClick={() => handlePriceRangeToggle(range)}
             >
@@ -463,18 +506,19 @@ const FilterPanel: React.FC = () => {
                 key={index}
                 className={`px-3 py-1.5 text-sm rounded-md border ${
                   isSizeRangeSelected(range)
-                    ? 'bg-green-50 border-green-300 text-green-700'
-                    : 'border-gray-300 hover:bg-gray-50'
+                    ? "bg-green-50 border-green-300 text-green-700"
+                    : "border-gray-300 hover:bg-gray-50"
                 }`}
                 onClick={() => handleSizeRangeToggle(range)}
               >
-                {formatSquareYards(range[0])} - {formatSquareYards(range[1])} sq.yd
+                {formatSquareYards(range[0])} - {formatSquareYards(range[1])}{" "}
+                sq.yd
               </button>
             ))}
           </div>
         )}
       </div>
-     {/* 1. Sort By */}
+      {/* 1. Sort By */}
       <div>
         <h4 className="text-sm font-medium mb-2">{UI_TEXT.labels.sortBy}</h4>
         <select
@@ -500,7 +544,7 @@ const FilterPanel: React.FC = () => {
           )}
         </h4>
         <select
-          value={filters.zone || ''}
+          value={filters.zone || ""}
           onChange={(e) => handleZoneChange(e.target.value)}
           className="w-full border rounded-md p-2 text-sm"
         >
@@ -521,11 +565,7 @@ const FilterPanel: React.FC = () => {
             onClick={() => setShowRating(!showRating)}
             className="text-blue-600 text-sm flex items-center"
           >
-            {showRating ? (
-              <ChevronUp size={16} />
-            ) : (
-              <ChevronDown size={16} />
-            )}
+            {showRating ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>
         </div>
 
@@ -534,8 +574,8 @@ const FilterPanel: React.FC = () => {
             <button
               className={`px-3 py-1.5 text-sm rounded-md border ${
                 filters.rating === undefined
-                  ? 'bg-blue-50 border-blue-300 text-blue-700'
-                  : 'border-gray-300 hover:bg-gray-50'
+                  ? "bg-blue-50 border-blue-300 text-blue-700"
+                  : "border-gray-300 hover:bg-gray-50"
               }`}
               onClick={() => updateFilters({ rating: undefined })}
             >
@@ -546,8 +586,8 @@ const FilterPanel: React.FC = () => {
                 key={rating}
                 className={`px-3 py-1.5 text-sm rounded-md border flex items-center justify-center space-x-1 ${
                   filters.rating === rating
-                    ? 'bg-blue-50 border-blue-300 text-blue-700'
-                    : 'border-gray-300 hover:bg-gray-50'
+                    ? "bg-blue-50 border-blue-300 text-blue-700"
+                    : "border-gray-300 hover:bg-gray-50"
                 }`}
                 onClick={() => updateFilters({ rating })}
               >
@@ -620,8 +660,8 @@ const FilterPanel: React.FC = () => {
                   key={tag}
                   className={`flex items-center w-full px-3 py-1.5 text-sm rounded-md border ${
                     filters.tags.includes(tag)
-                      ? 'bg-green-50 border-green-300 text-green-700'
-                      : 'border-gray-300 hover:bg-gray-50'
+                      ? "bg-green-50 border-green-300 text-green-700"
+                      : "border-gray-300 hover:bg-gray-50"
                   }`}
                   onClick={() => handleTagToggle(tag)}
                 >
@@ -700,8 +740,8 @@ const FilterPanel: React.FC = () => {
                   key={tag}
                   className={`flex items-center w-full px-3 py-1.5 text-sm rounded-md border ${
                     filters.excludedTags.includes(tag)
-                      ? 'bg-red-50 border-red-300 text-red-700'
-                      : 'border-gray-300 hover:bg-gray-50'
+                      ? "bg-red-50 border-red-300 text-red-700"
+                      : "border-gray-300 hover:bg-gray-50"
                   }`}
                   onClick={() => handleExcludeTagToggle(tag)}
                 >
@@ -729,8 +769,8 @@ const FilterPanel: React.FC = () => {
           <button
             className={`px-3 py-1.5 text-sm rounded-md border ${
               filters.hasLocation === null
-                ? 'bg-blue-50 border-blue-300 text-blue-700'
-                : 'border-gray-300 hover:bg-gray-50'
+                ? "bg-blue-50 border-blue-300 text-blue-700"
+                : "border-gray-300 hover:bg-gray-50"
             }`}
             onClick={() => handleLocationStatusChange(null)}
           >
@@ -739,27 +779,31 @@ const FilterPanel: React.FC = () => {
           <button
             className={`px-3 py-1.5 text-sm rounded-md border ${
               filters.hasLocation === true
-                ? 'bg-green-50 border-green-300 text-green-700'
-                : 'border-gray-300 hover:bg-gray-50'
+                ? "bg-green-50 border-green-300 text-green-700"
+                : "border-gray-300 hover:bg-gray-50"
             }`}
             onClick={() => handleLocationStatusChange(true)}
           >
             <div className="flex flex-col items-center">
               <span>Added</span>
-              <span className="text-xs text-gray-500">({locationStats.withLocation})</span>
+              <span className="text-xs text-gray-500">
+                ({locationStats.withLocation})
+              </span>
             </div>
           </button>
           <button
             className={`px-3 py-1.5 text-sm rounded-md border ${
               filters.hasLocation === false
-                ? 'bg-orange-50 border-orange-300 text-orange-700'
-                : 'border-gray-300 hover:bg-gray-50'
+                ? "bg-orange-50 border-orange-300 text-orange-700"
+                : "border-gray-300 hover:bg-gray-50"
             }`}
             onClick={() => handleLocationStatusChange(false)}
           >
             <div className="flex flex-col items-center">
               <span>Missing</span>
-              <span className="text-xs text-gray-500">({locationStats.withoutLocation})</span>
+              <span className="text-xs text-gray-500">
+                ({locationStats.withoutLocation})
+              </span>
             </div>
           </button>
         </div>
@@ -792,17 +836,16 @@ const FilterPanel: React.FC = () => {
                 className={`px-3 py-1.5 text-sm rounded-md border ${
                   filters.radiusRange[0] === range[0] &&
                   filters.radiusRange[1] === range[1]
-                    ? 'bg-purple-50 border-purple-300 text-purple-700'
-                    : 'border-gray-300 hover:bg-gray-50'
+                    ? "bg-purple-50 border-purple-300 text-purple-700"
+                    : "border-gray-300 hover:bg-gray-50"
                 }`}
                 onClick={() =>
                   updateFilters({ radiusRange: [range[0], range[1]] })
                 }
               >
-                {range[0] === 0 && range[1] === 0 
-                  ? 'No Radius' 
-                  : `${formatRadius(range[0])} - ${formatRadius(range[1])}`
-                }
+                {range[0] === 0 && range[1] === 0
+                  ? "No Radius"
+                  : `${formatRadius(range[0])} - ${formatRadius(range[1])}`}
               </button>
             ))}
           </div>

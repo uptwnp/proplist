@@ -1,7 +1,41 @@
-import React, { useState, useEffect } from 'react';
-import { X, Plus, Edit, Trash2, Search, Tag as TagIcon, Check } from 'lucide-react';
-import { SUGGESTED_TAGS, UI_TEXT } from '../constants';
+import React, { useState, useEffect } from "react";
+import {
+  X,
+  Plus,
+  Edit,
+  Trash2,
+  Search,
+  Tag as TagIcon,
+  Check,
+} from "lucide-react";
+import { SUGGESTED_TAGS, UI_TEXT } from "../constants";
 
+// Cache key for tag search
+const TAG_SEARCH_KEY = "cached_tag_search";
+
+// Load saved search term for tags
+const loadTagSearchTerm = (): string => {
+  try {
+    const saved = localStorage.getItem(TAG_SEARCH_KEY);
+    return saved || "";
+  } catch (error) {
+    console.error("Error loading tag search term:", error);
+    return "";
+  }
+};
+
+// Save search term for tags
+const saveTagSearchTerm = (term: string) => {
+  try {
+    if (term.trim()) {
+      localStorage.setItem(TAG_SEARCH_KEY, term);
+    } else {
+      localStorage.removeItem(TAG_SEARCH_KEY);
+    }
+  } catch (error) {
+    console.error("Error saving tag search term:", error);
+  }
+};
 interface TagManagementModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -15,36 +49,41 @@ const TagManagementModal: React.FC<TagManagementModalProps> = ({
   onClose,
   selectedTags,
   onTagsChange,
-  allTags = []
+  allTags = [],
 }) => {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(() => loadTagSearchTerm());
   const [editingTag, setEditingTag] = useState<string | null>(null);
-  const [editTagName, setEditTagName] = useState('');
+  const [editTagName, setEditTagName] = useState("");
 
   // Combine suggested tags with existing tags from properties
-  const allAvailableTags = Array.from(new Set([...SUGGESTED_TAGS, ...allTags])).sort();
+  const allAvailableTags = Array.from(
+    new Set([...SUGGESTED_TAGS, ...allTags])
+  ).sort();
 
   // Filter tags based on search query
-  const filteredTags = allAvailableTags.filter(tag =>
+  const filteredTags = allAvailableTags.filter((tag) =>
     tag.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   // Check if search query would create a new tag
-  const isNewTag = searchQuery.trim() && 
-    !allAvailableTags.some(tag => tag.toLowerCase() === searchQuery.trim().toLowerCase());
+  const isNewTag =
+    searchQuery.trim() &&
+    !allAvailableTags.some(
+      (tag) => tag.toLowerCase() === searchQuery.trim().toLowerCase()
+    );
 
   const handleAddNewTag = () => {
     const trimmedTag = searchQuery.trim();
     if (trimmedTag && !allAvailableTags.includes(trimmedTag)) {
       const updatedTags = [...selectedTags, trimmedTag];
       onTagsChange(updatedTags);
-      setSearchQuery('');
+      setSearchQuery("");
     }
   };
 
   const handleToggleTag = (tag: string) => {
     const updatedTags = selectedTags.includes(tag)
-      ? selectedTags.filter(t => t !== tag)
+      ? selectedTags.filter((t) => t !== tag)
       : [...selectedTags, tag];
     onTagsChange(updatedTags);
   };
@@ -57,35 +96,40 @@ const TagManagementModal: React.FC<TagManagementModalProps> = ({
   const handleUpdateTag = () => {
     const trimmedTag = editTagName.trim();
     if (trimmedTag && editingTag && trimmedTag !== editingTag) {
-      const updatedTags = selectedTags.map(tag => 
+      const updatedTags = selectedTags.map((tag) =>
         tag === editingTag ? trimmedTag : tag
       );
       onTagsChange(updatedTags);
     }
     setEditingTag(null);
-    setEditTagName('');
+    setEditTagName("");
   };
 
   const handleRemoveTag = (tagToRemove: string) => {
-    const updatedTags = selectedTags.filter(tag => tag !== tagToRemove);
+    const updatedTags = selectedTags.filter((tag) => tag !== tagToRemove);
     onTagsChange(updatedTags);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
+    if (e.key === "Enter") {
       e.preventDefault();
       if (isNewTag) {
         handleAddNewTag();
       } else if (filteredTags.length === 1) {
         // If there's exactly one filtered tag, toggle it
         handleToggleTag(filteredTags[0]);
-        setSearchQuery('');
+        setSearchQuery("");
       }
     }
   };
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
+
+    // Save search term with debouncing
+    const timeoutId = setTimeout(() => {
+      saveTagSearchTerm(e.target.value);
+    }, 500);
   };
 
   if (!isOpen) return null;
@@ -119,6 +163,11 @@ const TagManagementModal: React.FC<TagManagementModalProps> = ({
                 onKeyPress={handleKeyPress}
                 className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Search existing tags or type to add new..."
+                title={
+                  searchQuery
+                    ? `Current search: ${searchQuery}`
+                    : "Search existing tags or type to add new..."
+                }
               />
               <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                 {isNewTag ? (
@@ -137,7 +186,8 @@ const TagManagementModal: React.FC<TagManagementModalProps> = ({
             {isNewTag && (
               <div className="mt-2 text-sm text-green-600 flex items-center">
                 <Plus size={14} className="mr-1" />
-                Press Enter or click + to add "{searchQuery.trim()}" as a new tag
+                Press Enter or click + to add "{searchQuery.trim()}" as a new
+                tag
               </div>
             )}
           </div>
@@ -164,7 +214,7 @@ const TagManagementModal: React.FC<TagManagementModalProps> = ({
                             value={editTagName}
                             onChange={(e) => setEditTagName(e.target.value)}
                             onKeyPress={(e) => {
-                              if (e.key === 'Enter') {
+                              if (e.key === "Enter") {
                                 e.preventDefault();
                                 handleUpdateTag();
                               }
@@ -202,7 +252,9 @@ const TagManagementModal: React.FC<TagManagementModalProps> = ({
               <div>
                 <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center">
                   <Search size={16} className="mr-2" />
-                  {searchQuery ? `Search Results (${filteredTags.length})` : `${UI_TEXT.labels.availableTags} (${filteredTags.length})`}
+                  {searchQuery
+                    ? `Search Results (${filteredTags.length})`
+                    : `${UI_TEXT.labels.availableTags} (${filteredTags.length})`}
                 </h3>
                 {filteredTags.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
@@ -212,8 +264,8 @@ const TagManagementModal: React.FC<TagManagementModalProps> = ({
                         onClick={() => handleToggleTag(tag)}
                         className={`flex items-center space-x-1 px-3 py-2 text-sm rounded-lg border transition-all hover:scale-105 ${
                           selectedTags.includes(tag)
-                            ? 'bg-blue-100 text-blue-800 border-blue-200 shadow-sm'
-                            : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100 hover:border-gray-300'
+                            ? "bg-blue-100 text-blue-800 border-blue-200 shadow-sm"
+                            : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100 hover:border-gray-300"
                         }`}
                       >
                         <span>{tag}</span>
@@ -226,13 +278,19 @@ const TagManagementModal: React.FC<TagManagementModalProps> = ({
                 ) : searchQuery ? (
                   <div className="text-center py-8 text-gray-500">
                     <Search size={32} className="mx-auto mb-2 text-gray-300" />
-                    <p className="text-sm">No existing tags match "{searchQuery}"</p>
+                    <p className="text-sm">
+                      No existing tags match "{searchQuery}"
+                    </p>
                     {isNewTag && (
-                      <p className="text-xs mt-1">Press Enter to add it as a new tag</p>
+                      <p className="text-xs mt-1">
+                        Press Enter to add it as a new tag
+                      </p>
                     )}
                   </div>
                 ) : (
-                  <p className="text-gray-500 text-sm">{UI_TEXT.noData.noTags}</p>
+                  <p className="text-gray-500 text-sm">
+                    {UI_TEXT.noData.noTags}
+                  </p>
                 )}
               </div>
             </div>
@@ -242,7 +300,8 @@ const TagManagementModal: React.FC<TagManagementModalProps> = ({
         {/* Footer */}
         <div className="p-4 border-t bg-gray-50 flex justify-between items-center flex-shrink-0">
           <div className="text-sm text-gray-600">
-            {selectedTags.length} tag{selectedTags.length !== 1 ? 's' : ''} selected
+            {selectedTags.length} tag{selectedTags.length !== 1 ? "s" : ""}{" "}
+            selected
           </div>
           <div className="flex space-x-3">
             <button
