@@ -15,6 +15,9 @@ interface PropertyFormProps {
   onClose: () => void;
 }
 
+const LOCAL_STORAGE_KEY = 'propertyFormData';
+const EXPIRATION_TIME = 30 * 60 * 1000; // 30 minutes
+
 const PropertyForm: React.FC<PropertyFormProps> = ({ property, onClose }) => {
   const { createProperty, updateProperty, loadingStates, properties, isMobileView } = useStore();
 
@@ -33,13 +36,41 @@ const PropertyForm: React.FC<PropertyFormProps> = ({ property, onClose }) => {
   };
 
   const [formData, setFormData] = useState<Partial<Property>>(() => {
-    const initialData = property || {
+    if (property) {
+      // If editing, use property data
+      return {
+        ...property,
+        location: ensureValidLocation(property.location),
+      };
+    }
+
+    // If creating, check for saved data in localStorage
+    const savedDataJSON = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (savedDataJSON) {
+      try {
+        const { data, timestamp } = JSON.parse(savedDataJSON);
+        const isExpired = (new Date().getTime() - timestamp) > EXPIRATION_TIME;
+
+        if (!isExpired) {
+          return data;
+        } else {
+          // Clear expired data
+          localStorage.removeItem(LOCAL_STORAGE_KEY);
+        }
+      } catch (error) {
+        console.error("Error parsing saved form data:", error);
+        localStorage.removeItem(LOCAL_STORAGE_KEY);
+      }
+    }
+
+    // Default state for a new property
+    const initialData = {
       size_min: 0,
       size_max: 0,
       price_min: 0,
       price_max: 0,
       tags: [],
-      rating: undefined, // No default rating
+      rating: undefined,
       location: DEFAULT_COORDINATES,
       radius: 0,
       area: '',
@@ -48,8 +79,6 @@ const PropertyForm: React.FC<PropertyFormProps> = ({ property, onClose }) => {
       description: '',
       note: '',
     };
-
-    // Ensure location is always valid
     return {
       ...initialData,
       location: ensureValidLocation(initialData.location),
@@ -70,38 +99,16 @@ const PropertyForm: React.FC<PropertyFormProps> = ({ property, onClose }) => {
 
   const isLoading = loadingStates.creating || loadingStates.updating;
 
-  // Ensure location and other data are properly initialized when property changes
+  // Save form data to localStorage on change, only for new properties
   useEffect(() => {
-    if (property) {
-      // Completely reinitialize formData with the property data
-      const validLocation = ensureValidLocation(property.location);
-      const newFormData = {
-        ...property,
-        location: validLocation,
+    if (!property) {
+      const dataToStore = {
+        data: formData,
+        timestamp: new Date().getTime(),
       };
-
-      setFormData(newFormData);
-    } else {
-      // Reset to default state for new property
-      const defaultFormData = {
-        size_min: 0,
-        size_max: 0,
-        price_min: 0,
-        price_max: 0,
-        tags: [],
-        rating: undefined, // No default rating
-        location: DEFAULT_COORDINATES,
-        radius: 0,
-        area: '',
-        zone: '',
-        type: 'Plot Residential' as const,
-        description: '',
-        note: '',
-      };
-
-      setFormData(defaultFormData);
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(dataToStore));
     }
-  }, [property]);
+  }, [formData, property]);
 
   // Get unique area values from all properties
   const getUniqueAreas = useCallback(() => {
@@ -241,10 +248,18 @@ const PropertyForm: React.FC<PropertyFormProps> = ({ property, onClose }) => {
         const { id, created_on, updated_on, ...newPropertyData } = propertyData;
         await createProperty(newPropertyData);
       }
+      // Clear saved data on successful submission
+      localStorage.removeItem(LOCAL_STORAGE_KEY);
       onClose();
     } catch (error) {
       console.error('Failed to save property:', error);
     }
+  };
+
+  const handleClose = () => {
+    // Clear saved data on manual close
+    localStorage.removeItem(LOCAL_STORAGE_KEY);
+    onClose();
   };
 
   const renderRatingSelector = () => {
@@ -300,7 +315,7 @@ const PropertyForm: React.FC<PropertyFormProps> = ({ property, onClose }) => {
               : UI_TEXT.buttons.addProperty}
           </h2>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-2 hover:bg-gray-100 rounded-full"
             disabled={isLoading}
           >
@@ -580,7 +595,7 @@ const PropertyForm: React.FC<PropertyFormProps> = ({ property, onClose }) => {
           <div className="flex justify-end space-x-3 pt-4">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
               disabled={isLoading}
             >
