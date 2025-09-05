@@ -638,23 +638,22 @@ const LocationUpdateModal: React.FC<LocationUpdateModalProps> = ({
     );
   };
 
-  // Auto-search when modal opens - UPDATED: Only if property has zone AND no valid location
+  // Auto-search when modal opens - UPDATED: Only if property has area AND no valid location
   useEffect(() => {
     const performAutoSearch = async () => {
       if (
-        property.zone &&
-        property.zone !== "Other" &&
-        property.zone.trim() &&
+        property.area &&
+        property.area.trim() &&
         !hasAutoSearched &&
         !hasValidLocation()
       ) {
         // Only auto-search if location doesn't exist
-        const searchTerm = `${property.zone}, Panipat`;
+        const searchTerm = `${property.area}, Panipat`;
         setSearchQuery(searchTerm);
         setHasAutoSearched(true);
 
         console.log(
-          "Auto-searching for zone (no existing location):",
+          "Auto-searching for area (no existing location):",
           searchTerm
         );
         await geocodeLocation(searchTerm);
@@ -664,7 +663,7 @@ const LocationUpdateModal: React.FC<LocationUpdateModalProps> = ({
     // Small delay to ensure modal is fully rendered
     const timer = setTimeout(performAutoSearch, 500);
     return () => clearTimeout(timer);
-  }, [property.zone, hasAutoSearched]);
+  }, [property.area, hasAutoSearched]);
 
   const handleMapClick = useCallback((event: any) => {
     // First check if event exists and has lngLat property
